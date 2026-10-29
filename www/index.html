@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>RemindMe</title>
+<style>
+:root{--bg:#f4f5fa;--card:#fff;--tx:#1b1f2a;--mut:#69728a;--pri:#4f46e5;--onpri:#fff;--bd:#e1e4ee;--red:#dc2626;--grn:#16a34a;--warn:#fff4d6}
+[data-theme=dark]{--bg:#0f1219;--card:#1a1f2b;--tx:#eef0f6;--mut:#9aa3b8;--pri:#818cf8;--onpri:#0f1219;--bd:#2a3140;--red:#f87171;--grn:#4ade80;--warn:#3a321a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--tx);font-size:16px}
+#app{display:flex;flex-direction:column;height:100%;padding-top:env(safe-area-inset-top)}
+#main{flex:1;overflow-y:auto;padding:14px 14px 96px}
+h1{font-size:22px;margin:4px 0 2px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:18px 2px 8px}
+.mut{color:var(--mut);font-size:13px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:8px}
+.row{display:flex;align-items:center;gap:10px}
+.grow{flex:1;min-width:0}
+.title{font-weight:600;word-break:break-word}
+.done .title{text-decoration:line-through;color:var(--mut)}
+.chk{width:28px;height:28px;border-radius:50%;border:2px solid var(--pri);background:none;color:var(--onpri);font-size:16px;flex:none;display:flex;align-items:center;justify-content:center;padding:0}
+.chk.on{background:var(--pri)}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;background:var(--bd);color:var(--mut);margin:4px 4px 0 0}
+.tag.hi{background:var(--red);color:#fff}
+.over .meta{color:var(--red)}
+nav{display:flex;border-top:1px solid var(--bd);background:var(--card);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;color:var(--mut);padding:10px 2px;font-size:12px}
+nav button b{display:block;font-size:20px;font-weight:400}
+nav button.on{color:var(--pri);font-weight:700}
+#fab{position:fixed;right:18px;bottom:calc(76px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:0;background:var(--pri);color:var(--onpri);font-size:30px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+input,select,textarea{width:100%;font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:10px;margin:4px 0 10px}
+label{font-size:13px;color:var(--mut)}
+label.inl{display:flex;gap:8px;align-items:center;margin:4px 0 12px;color:var(--tx);font-size:15px}
+label.inl input{width:auto;margin:0}
+button.btn{border:0;background:var(--pri);color:var(--onpri);border-radius:10px;padding:11px 16px;font:inherit;font-weight:600}
+button.btn.sec{background:var(--bd);color:var(--tx)}
+button.btn.danger{background:var(--red);color:#fff}
+button.sm{padding:6px 10px;font-size:13px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;z-index:20}
+#sheet.on{display:flex}
+.panel{background:var(--card);width:100%;max-height:92%;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+#lock{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:30;padding:20px}
+.dots{display:flex;gap:14px;margin:18px 0}
+.dots i{width:16px;height:16px;border-radius:50%;border:2px solid var(--pri)}
+.dots i.f{background:var(--pri)}
+.pad{display:grid;grid-template-columns:repeat(3,78px);gap:14px}
+.pad button{height:64px;border-radius:50%;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:24px}
+#toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:99px;font-size:14px;display:none;z-index:50}
+.banner{background:var(--warn);border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:14px}
+.vd{margin-top:10px;border-top:1px solid var(--bd);padding-top:10px;font-size:14px}
+.vd .row{margin-bottom:6px}
+.pw{font-family:monospace;word-break:break-all}
+.empty{text-align:center;color:var(--mut);padding:30px 10px}
+</style>
+</head>
+<body>
+<div id="app" style="visibility:hidden">
+  <div id="main"></div>
+  <button id="fab" data-act="fab">+</button>
+  <nav>
+    <button data-act="tab" data-v="today"><b>🏠</b>Today</button>
+    <button data-act="tab" data-v="tasks"><b>✅</b>Tasks</button>
+    <button data-act="tab" data-v="routine"><b>🔁</b>Routine</button>
+    <button data-act="tab" data-v="vault"><b>🔑</b>Vault</button>
+    <button data-act="tab" data-v="more"><b>⚙️</b>More</button>
+  </nav>
+</div>
+<div id="sheet"></div>
+<div id="lock"><h1>🔒 RemindMe</h1><div class="mut" id="lockmsg"></div><div class="dots" id="dots"></div><div class="pad" id="pad"></div></div>
+<div id="toast"></div>
+<input type="file" id="restoreFile" accept=".json,application/json" style="display:none">
+
+<script>
+(function(){
+'use strict';
+var Cap = window.Capacitor || {};
+function plug(name){
+  try{
+    if(Cap.Plugins && Cap.Plugins[name]) return Cap.Plugins[name];
+    var has=Cap.PluginHeaders && Cap.PluginHeaders.some(function(h){ return h.name===name; });
+    if(has && Cap.registerPlugin) return Cap.registerPlugin(name);
+  }catch(e){}
+  return undefined;
+}
+var P={};
+['LocalNotifications','App','Filesystem','Share','NativeBiometric','SpeechRecognition','BackgroundGeolocation'].forEach(function(n){ P[n]=plug(n); });
+var LN = P.LocalNotifications;
+var KEY = 'rm_data_v1';
+var CATS = ['Personal','Business','Bill','Birthday','Document','Follow-up'];
+var VCATS = ['Bank','Email','Social','Shopping','Other'];
+var TONES = {default:'Default', chime:'Chime', bell:'Bell', alarm:'Alarm', soft:'Soft', beep:'Beep', melody:'Melody'};
+var REP = {none:'Once', daily:'Daily', weekly:'Weekly', monthly:'Monthly', yearly:'Yearly'};
+
+function defaults(){ return {nextId:1, tasks:[], vault:[], notes:[], routine:[], locs:[], settings:{pin:null, bio:false, theme:'auto', summaryOn:true, summaryTime:'08:00', voiceLang:'ur-PK'}}; }
+function load(){
+  try{ var d = JSON.parse(localStorage.getItem(KEY)); if(d){ var b = defaults(); for(var k in b){ if(d[k]===undefined) d[k]=b[k]; } for(var s in b.settings){ if(d.settings[s]===undefined) d.settings[s]=b.settings[s]; } return d; } }catch(e){}
+  return defaults();
+}
+var db = load();
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){ toast('Could not save: '+e.message); } }
+var view='today', q='', locked=true, openV=null, showPw=false, lastHide=0;
+
+var $ = function(s){ return document.querySelector(s); };
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function pad2(n){ return (n<10?'0':'')+n; }
+function ymd(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function todayStr(){ return ymd(new Date()); }
+function localInput(d){ return ymd(d)+'T'+pad2(d.getHours())+':'+pad2(d.getMinutes()); }
+function fmt(d){ d=new Date(d); return d.toLocaleDateString(undefined,{day:'numeric',month:'short'})+' '+pad2(d.getHours())+':'+pad2(d.getMinutes()); }
+function startOfDay(d){ var x=new Date(d); x.setHours(0,0,0,0); return x; }
+function sameDay(a,b){ return ymd(a)===ymd(b); }
+function toast(m){ var t=$('#toast'); t.textContent=m; t.style.display='block'; clearTimeout(toast.t); toast.t=setTimeout(function(){ t.style.display='none'; },2200); }
+function newId(){ return db.nextId++; }
+
+/* ---------- date logic ---------- */
+function occursOn(t, day){
+  var due=new Date(t.dueAt), dd=startOfDay(day), d0=startOfDay(due);
+  if(t.repeat==='none') return sameDay(due,day);
+  if(dd<d0) return false;
+  if(t.repeat==='daily') return true;
+  if(t.repeat==='weekly') return dd.getDay()===d0.getDay();
+  if(t.repeat==='monthly') return dd.getDate()===d0.getDate();
+  if(t.repeat==='yearly') return dd.getMonth()===d0.getMonth() && dd.getDate()===d0.getDate();
+  return false;
+}
+function stepAt(due, repeat, k){
+  var d=new Date(due);
+  if(repeat==='daily') d.setDate(d.getDate()+k);
+  else if(repeat==='weekly') d.setDate(d.getDate()+7*k);
+  else if(repeat==='monthly') d.setMonth(d.getMonth()+k);
+  else if(repeat==='yearly') d.setFullYear(d.getFullYear()+k);
+  return d;
+}
+function nextOcc(t, from){
+  from = from || new Date();
+  var due=new Date(t.dueAt);
+  if(t.repeat==='none') return due;
+  for(var k=0;k<4000;k++){ var d=stepAt(due,t.repeat,k); if(d>=from) return d; }
+  return due;
+}
+function isDone(t){ return t.repeat==='none' ? !!t.done : t.lastDone===todayStr(); }
+function minutesOfDay(t){ var d=new Date(t.dueAt); return d.getHours()*60+d.getMinutes(); }
+
+/* ---------- notifications ---------- */
+function schedFor(repeat, d){
+  if(repeat==='none') return {at:d, allowWhileIdle:true};
+  var on={hour:d.getHours(), minute:d.getMinutes()};
+  if(repeat==='weekly') on.weekday=d.getDay()+1;
+  if(repeat==='monthly') on.day=d.getDate();
+  if(repeat==='yearly'){ on.month=d.getMonth()+1; on.day=d.getDate(); }
+  return {on:on, allowWhileIdle:true};
+}
+function occList(t, from, n){
+  var due=new Date(t.dueAt), res=[];
+  if(t.repeat==='none') return [due];
+  for(var k=0;k<4000 && res.length<n;k++){ var d=stepAt(due,t.repeat,k); if(d>=from) res.push(d); }
+  return res;
+}
+function taskIds(t){
+  var ids=[0,10,50];
+  for(var o=0;o<3;o++){ for(var k=1;k<=6;k++) ids.push(100+o*10+k); }
+  return ids.map(function(x){ return t.id*1000+x; });
+}
+function notifsFor(t){
+  var out=[], now=new Date(), base=t.id*1000, due=new Date(t.dueAt), ch='tone_'+(t.tone||'default');
+  function mk(slot, date, title, body, repeat){
+    var rep=(repeat===undefined)?t.repeat:repeat;
+    if(rep==='none' && date<=now) return;
+    out.push({id:base+slot, title:title, body:body, schedule:schedFor(rep,date), channelId:ch, actionTypeId:'REMINDER', extra:{taskId:t.id}});
+  }
+  mk(0, due, (t.priority==='high'?'‼ ':'')+t.title, t.cat);
+  if(t.pre>0) mk(10, new Date(due.getTime()-t.pre*864e5), 'Reminder: '+t.title, 'In '+t.pre+' day(s)');
+  if(t.nag){
+    var occs=occList(t, new Date(now.getTime()-31*60000), 3);
+    occs.forEach(function(o,oi){
+      if(t.repeat!=='none' && ymd(o)===t.lastDone) return;
+      for(var k=1;k<=6;k++) mk(100+oi*10+k, new Date(o.getTime()+k*300000), '⏰ '+t.title, 'Still not done', 'none');
+    });
+  }
+  return out;
+}
+var resched=Promise.resolve();
+function rescheduleAll(){ resched=resched.then(doResched).catch(function(){}); return resched; }
+async function doResched(){
+  if(!LN) return;
+  var pend=await LN.getPending();
+  var toCancel=pend.notifications.filter(function(n){ return !(n.id<1e9 && n.id%1000===50); }).map(function(n){ return {id:n.id}; });
+  if(toCancel.length) await LN.cancel({notifications:toCancel});
+  var list=[], now=new Date();
+  db.tasks.forEach(function(t){ if(t.repeat==='none' && t.done) return; list=list.concat(notifsFor(t)); });
+  db.vault.forEach(function(v){
+    if(!v.expires) return;
+    var d=new Date(v.expires+'T09:00:00');
+    if(d>now) list.push({id:1e9+v.id, title:'Time to change your password', body:v.name, schedule:{at:d,allowWhileIdle:true}, channelId:'tone_default'});
+  });
+  db.routine.forEach(function(r){
+    if(!r.time) return;
+    var hm=r.time.split(':');
+    list.push({id:1.5e9+r.id, title:'🔁 '+r.text, body:'Routine', schedule:{on:{hour:+hm[0],minute:+hm[1]},allowWhileIdle:true}, channelId:'tone_default'});
+  });
+  if(db.settings.summaryOn){
+    var hm2=db.settings.summaryTime.split(':');
+    for(var i=0;i<14;i++){
+      var day=new Date(); day.setDate(day.getDate()+i); day.setHours(+hm2[0],+hm2[1],0,0);
+      if(day<=now) continue;
+      var items=db.tasks.filter(function(t){ return occursOn(t,day) && !(t.repeat==='none'&&t.done); }).sort(function(a,b){ return minutesOfDay(a)-minutesOfDay(b); });
+      if(!items.length) continue;
+      list.push({id:2e9+i, title:'Tasks for today ('+items.length+')', body:items.slice(0,5).map(function(t){ return t.title; }).join(', '), schedule:{at:day,allowWhileIdle:true}, channelId:'tone_default'});
+    }
+  }
+  if(list.length) await LN.schedule({notifications:list});
+}
+async function initNotifs(){
+  if(!LN) return;
+  try{ LN.addListener('localNotificationActionPerformed', onAction); }catch(e){}
+  try{ await LN.requestPermissions(); }catch(e){}
+  var keys=Object.keys(TONES);
+  for(var i=0;i<keys.length;i++){
+    try{ await LN.createChannel({id:'tone_'+keys[i], name:'Reminders - '+TONES[keys[i]], importance:5, visibility:1, vibration:true, sound:(keys[i]==='default'?undefined:keys[i]+'.wav')}); }catch(e){}
+  }
+  try{ await LN.registerActionTypes({types:[{id:'REMINDER', actions:[{id:'done',title:'Done ✓'},{id:'snooze',title:'Snooze 10m'}]}]}); }catch(e){}
+  try{ var r=await LN.checkExactNotificationSetting(); db.exactWarn=(r.exact_alarm!=='granted'); }catch(e){}
+  await rescheduleAll();
+}
+async function onAction(ev){
+  var ex=ev.notification && ev.notification.extra; if(!ex) return;
+  var t=db.tasks.filter(function(x){ return x.id==ex.taskId; })[0]; if(!t) return;
+  if(ev.actionId==='done') await setDone(t,true);
+  else if(ev.actionId==='snooze') await snooze(t);
+  render();
+}
+async function snooze(t){
+  if(!LN) return;
+  try{ await LN.schedule({notifications:[{id:t.id*1000+50, title:'⏰ '+t.title, body:'Snoozed reminder', schedule:{at:new Date(Date.now()+600000),allowWhileIdle:true}, channelId:'tone_'+(t.tone||'default'), actionTypeId:'REMINDER', extra:{taskId:t.id}}]}); toast('I will remind you in 10 minutes'); }catch(e){}
+}
+async function setDone(t, on){
+  if(t.repeat==='none'){ t.done=on; t.doneAt=on?new Date().toISOString():null; }
+  else { t.lastDone = on ? todayStr() : null; }
+  save();
+  if(on && LN){
+    var ids=taskIds(t).map(function(x){ return {id:x}; });
+    try{ await LN.cancel({notifications:ids}); }catch(e){}
+  }
+  await rescheduleAll();
+}
+
+/* ---------- location reminders ---------- */
+var geoId=null;
+function haversine(a,b,c,d){ var R=6371000, r=Math.PI/180, dLa=(c-a)*r, dLo=(d-b)*r; var x=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dLo/2)*Math.sin(dLo/2); return 2*R*Math.asin(Math.sqrt(x)); }
+function checkLocs(loc){
+  var now=Date.now(), changed=false;
+  db.locs.forEach(function(l){
+    if(!l.active) return;
+    var dist=haversine(loc.latitude, loc.longitude, l.lat, l.lng);
+    if(dist<=l.radius && now-(l.lastFired||0)>6*3600e3){
+      l.lastFired=now; changed=true;
+      if(LN){ LN.schedule({notifications:[{id:2100000000+(l.id%40000000), title:'📍 '+l.place, body:l.text, schedule:{at:new Date(now+1000),allowWhileIdle:true}, channelId:'tone_default'}]}).catch(function(){}); }
+    }
+  });
+  if(changed) save();
+}
+async function startGeo(){
+  var BG=P.BackgroundGeolocation; if(!BG) return;
+  if(geoId!==null){ try{ await BG.removeWatcher({id:geoId}); }catch(e){} geoId=null; }
+  if(!db.locs.some(function(l){ return l.active; })) return;
+  try{
+    geoId=await BG.addWatcher({backgroundTitle:'RemindMe', backgroundMessage:'Location reminders are active', requestPermissions:true, stale:false, distanceFilter:50}, function(loc, err){
+      if(err){ if(err.code==='NOT_AUTHORIZED') toast('Please allow location access "All the time" in Settings'); return; }
+      if(loc) checkLocs(loc);
+    });
+  }catch(e){}
+}
+function locSheet(){
+  var got=null;
+  sheet('<h1>Location reminder</h1><div class="mut" style="margin-bottom:10px">Stand at the place you want the reminder for and tap "Use my current location". You will be reminded when you come near it again.</div>'+
+    '<label>What should I remind you?</label><input id="l_text" placeholder="e.g. Buy milk">'+
+    '<label>Place name</label><input id="l_place" placeholder="e.g. Market">'+
+    '<label>Remind me when within</label><select id="l_rad"><option value="100">100 m</option><option value="200" selected>200 m</option><option value="500">500 m</option><option value="1000">1 km</option></select>'+
+    '<div class="btns" style="margin-bottom:12px"><button class="btn sec" id="l_get">📍 Use my current location</button></div><div class="mut" id="l_info"></div>'+
+    '<div class="btns"><button class="btn" id="l_save">Save</button><button class="btn sec" data-act="close">Cancel</button></div>');
+  $('#l_get').onclick=function(){
+    if(!navigator.geolocation){ toast('Location is not available'); return; }
+    $('#l_info').textContent='Finding location...';
+    navigator.geolocation.getCurrentPosition(function(pos){ got={lat:pos.coords.latitude,lng:pos.coords.longitude}; $('#l_info').textContent='✓ Location captured'; }, function(err){ $('#l_info').textContent='Could not get location. Turn on GPS and allow permission.'; }, {enableHighAccuracy:true, timeout:20000});
+  };
+  $('#l_save').onclick=async function(){
+    var text=val('l_text').trim(), place=val('l_place').trim()||'Place';
+    if(!text){ toast('Enter a reminder text'); return; }
+    if(!got){ toast('Capture your location first'); return; }
+    db.locs.push({id:newId(), text:text, place:place, lat:got.lat, lng:got.lng, radius:+val('l_rad'), active:true, lastFired:0});
+    save(); closeSheet(); render(); startGeo();
+  };
+}
+
+/* ---------- lock ---------- */
+var pinBuf='', pinStage='enter', pinFirst='';
+async function hash(s){
+  try{ var b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode('rm:'+s)); return Array.prototype.map.call(new Uint8Array(b),function(x){ return pad2(x.toString(16)); }).join(''); }
+  catch(e){ var h=5381; for(var i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))|0; return 'x'+h; }
+}
+function drawDots(){ $('#dots').innerHTML=[0,1,2,3].map(function(i){ return '<i class="'+(i<pinBuf.length?'f':'')+'"></i>'; }).join(''); }
+function lockMsg(m){ $('#lockmsg').textContent=m; }
+function showLock(){
+  locked=true; pinBuf=''; $('#lock').style.display='flex'; $('#app').style.visibility='hidden'; closeSheet();
+  if(!db.settings.pin){ pinStage='new'; lockMsg('Set a new 4-digit PIN'); }
+  else { pinStage='enter'; lockMsg('Enter PIN'); if(db.settings.bio) tryBio(); }
+  drawDots();
+}
+function unlock(){ locked=false; $('#lock').style.display='none'; $('#app').style.visibility='visible'; render(); }
+async function tryBio(){
+  var B=P.NativeBiometric; if(!B) return;
+  try{ var a=await B.isAvailable(); if(!a.isAvailable) return; await B.verifyIdentity({reason:'Unlock RemindMe', title:'RemindMe'}); unlock(); }catch(e){}
+}
+async function pressKey(k){
+  if(k==='<'){ pinBuf=pinBuf.slice(0,-1); drawDots(); return; }
+  if(pinBuf.length>=4) return;
+  pinBuf+=k; drawDots();
+  if(pinBuf.length<4) return;
+  var pin=pinBuf; pinBuf='';
+  if(pinStage==='new'){ pinFirst=pin; pinStage='confirm'; lockMsg('Enter the PIN again'); }
+  else if(pinStage==='confirm'){
+    if(pin===pinFirst){ db.settings.pin=await hash(pin); save(); unlock(); toast('PIN set'); }
+    else { pinStage='new'; lockMsg('PINs did not match, set a new PIN'); }
+  } else {
+    if(await hash(pin)===db.settings.pin) unlock(); else lockMsg('Wrong PIN, try again');
+  }
+  setTimeout(drawDots,0);
+}
+function buildPad(){
+  var keys=['1','2','3','4','5','6','7','8','9','','0','<'];
+  $('#pad').innerHTML=keys.map(function(k){ return k===''?'<span></span>':'<button data-k="'+k+'">'+(k==='<'?'⌫':k)+'</button>'; }).join('');
+}
+
+/* ---------- sheets ---------- */
+function sheet(html){ var s=$('#sheet'); s.innerHTML='<div class="panel">'+html+'</div>'; s.classList.add('on'); }
+function closeSheet(){ var s=$('#sheet'); s.classList.remove('on'); s.innerHTML=''; }
+function opts(list, sel){ return list.map(function(x){ return '<option'+(x===sel?' selected':'')+'>'+esc(x)+'</option>'; }).join(''); }
+function kopts(map, sel){ return Object.keys(map).map(function(k){ return '<option value="'+k+'"'+(k===sel?' selected':'')+'>'+esc(map[k])+'</option>'; }).join(''); }
+function val(id){ return $('#'+id).value; }
+
+function digitsFix(s){ return s.replace(/[۰-۹]/g,function(c){ return String(c.charCodeAt(0)-0x06F0); }).replace(/[٠-٩]/g,function(c){ return String(c.charCodeAt(0)-0x0660); }); }
+function parseVoiceTime(text){
+  var s=digitsFix(String(text).toLowerCase()), now=new Date(), d=new Date(now), found=false, day=0;
+  var m=s.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|baje|bje|بجے)/) || s.match(/\b(\d{1,2}):(\d{2})/) || s.match(/\bat\s+(\d{1,2})(?::(\d{2}))?/);
+  var pm=/(shaam|sham|raat|dopahar|dupahar|\bpm\b|شام|رات|دوپہر)/.test(s), am=/(subah|subha|\bam\b|صبح)/.test(s);
+  if(/(parson|parso|پرسوں)/.test(s)) day=2; else if(/(\bkal\b|tomorrow|کل)/.test(s)) day=1;
+  if(day){ d.setDate(d.getDate()+day); found=true; }
+  if(m){
+    var h=+m[1], mi=m[2]?+m[2]:0;
+    if(h<=23 && mi<60){ if(pm && h<12) h+=12; if(am && h===12) h=0; d.setHours(h,mi,0,0); found=true; if(!day && d<=now) d.setDate(d.getDate()+1); }
+  } else if(day){ d.setHours(9,0,0,0); }
+  return found?d:null;
+}
+async function listen(){
+  var SR=P.SpeechRecognition;
+  if(!SR){ toast('Voice input is not included in this build'); return ''; }
+  try{
+    var av=await SR.available(); if(!av.available){ toast('Speech recognition is not available on this phone'); return ''; }
+    try{ var pr=await SR.requestPermissions(); if(pr && pr.speechRecognition==='denied'){ toast('Please allow microphone access'); return ''; } }catch(e){}
+    var r=await SR.start({language:db.settings.voiceLang, maxResults:1, prompt:'Say your task', partialResults:false, popup:true});
+    return (r && r.matches && r.matches[0]) || '';
+  }catch(e){ toast('Voice input failed: '+(e.message||e)); return ''; }
+}
+function taskSheet(id, preTitle){
+  var t=db.tasks.filter(function(x){ return x.id===id; })[0];
+  var isNew=!t;
+  if(isNew){ var d=new Date(); d.setMinutes(0,0,0); d.setHours(d.getHours()+1); t={title:preTitle||'', dueAt:d.toISOString(), repeat:'none', priority:'normal', cat:'Personal', tone:'default', pre:0, nag:false}; }
+  sheet('<h1>'+(isNew?'New task':'Edit task')+'</h1>'+(isNew?'<div class="btns" style="margin-bottom:10px"><button class="btn sec sm" id="f_mic">🎤 Speak your task</button></div>':'')+
+    '<label>What to do</label><input id="f_title" value="'+esc(t.title)+'" placeholder="e.g. Pay electricity bill">'+
+    '<label>When</label><input id="f_due" type="datetime-local" value="'+localInput(new Date(t.dueAt))+'">'+
+    '<label>Category</label><select id="f_cat">'+opts(CATS,t.cat)+'</select>'+
+    '<label>Repeat</label><select id="f_rep">'+kopts(REP,t.repeat)+'</select>'+
+    '<label>Priority</label><select id="f_pri"><option value="normal"'+(t.priority==='normal'?' selected':'')+'>Normal</option><option value="high"'+(t.priority==='high'?' selected':'')+'>High</option></select>'+
+    '<label>Tone</label><select id="f_tone">'+kopts(TONES,t.tone)+'</select>'+
+    '<label>Remind me earlier</label><select id="f_pre"><option value="0">No</option><option value="1"'+(t.pre==1?' selected':'')+'>1 day before</option><option value="3"'+(t.pre==3?' selected':'')+'>3 days before</option><option value="7"'+(t.pre==7?' selected':'')+'>7 days before</option></select>'+
+    '<label class="inl"><input id="f_nag" type="checkbox"'+(t.nag?' checked':'')+'> Keep reminding every 5 min until done</label>'+
+    '<div class="btns"><button class="btn" id="f_save">Save</button><button class="btn sec" data-act="close">Cancel</button>'+(isNew?'':'<button class="btn danger" id="f_del">Delete</button>')+'</div>');
+  if(isNew) $('#f_mic').onclick=async function(){
+    var text=await listen(); if(!text) return;
+    $('#f_title').value=text;
+    var dt=parseVoiceTime(text); if(dt) $('#f_due').value=localInput(dt);
+    toast('Check the details, then tap Save');
+  };
+  if(isNew){
+    $('#f_cat').onchange=function(){ if(this.value==='Birthday'){ $('#f_rep').value='yearly'; $('#f_pre').value='1'; } else if(this.value==='Bill'){ $('#f_rep').value='monthly'; $('#f_pre').value='3'; } else if(this.value==='Document'){ $('#f_pre').value='7'; } };
+    $('#f_pri').onchange=function(){ if(this.value==='high' && $('#f_tone').value==='default') $('#f_tone').value='alarm'; };
+  }
+  $('#f_save').onclick=async function(){
+    var title=val('f_title').trim(), due=val('f_due');
+    if(!title){ toast('Enter a task name'); return; }
+    if(!due){ toast('Choose a time'); return; }
+    var o={title:title, dueAt:new Date(due).toISOString(), cat:val('f_cat'), repeat:val('f_rep'), priority:val('f_pri'), tone:val('f_tone'), pre:+val('f_pre'), nag:$('#f_nag').checked};
+    if(isNew){ o.id=newId(); o.done=false; db.tasks.push(o); }
+    else { for(var k in o) t[k]=o[k]; if(t.repeat!=='none'){ t.done=false; } }
+    save(); await rescheduleAll(); closeSheet(); render(); toast('Saved');
+  };
+  if(!isNew) $('#f_del').onclick=async function(){
+    if(!confirm('Delete this task?')) return;
+    if(LN){ try{ await LN.cancel({notifications:taskIds(t).map(function(x){ return {id:x}; })}); }catch(e){} }
+    db.tasks=db.tasks.filter(function(x){ return x.id!==t.id; }); save(); await rescheduleAll(); closeSheet(); render();
+  };
+}
+
+function vaultSheet(id){
+  var v=db.vault.filter(function(x){ return x.id===id; })[0], isNew=!v;
+  if(isNew) v={name:'',cat:'Other',user:'',pass:'',notes:'',fav:false,expires:''};
+  sheet('<h1>'+(isNew?'New account':'Edit account')+'</h1>'+
+    '<label>Name (e.g. HBL, Gmail)</label><input id="v_name" value="'+esc(v.name)+'">'+
+    '<label>Category</label><select id="v_cat">'+opts(VCATS,v.cat)+'</select>'+
+    '<label>Username / email</label><input id="v_user" value="'+esc(v.user)+'" autocapitalize="off">'+
+    '<label>Password</label><input id="v_pass" value="'+esc(v.pass)+'" autocapitalize="off" autocomplete="off">'+
+    '<label>Notes (security questions, etc.)</label><textarea id="v_notes" rows="3">'+esc(v.notes)+'</textarea>'+
+    '<label>Change password by (optional)</label><input id="v_exp" type="date" value="'+esc(v.expires)+'">'+
+    '<label class="inl"><input id="v_fav" type="checkbox"'+(v.fav?' checked':'')+'> Favorite ★</label>'+
+    '<div class="btns"><button class="btn" id="v_save">Save</button><button class="btn sec" data-act="close">Cancel</button></div>');
+  $('#v_save').onclick=async function(){
+    var name=val('v_name').trim(); if(!name){ toast('Enter a name'); return; }
+    var o={name:name, cat:val('v_cat'), user:val('v_user'), pass:val('v_pass'), notes:val('v_notes'), expires:val('v_exp'), fav:$('#v_fav').checked};
+    if(isNew){ o.id=newId(); db.vault.push(o); } else { for(var k in o) v[k]=o[k]; }
+    save(); await rescheduleAll(); closeSheet(); render(); toast('Saved');
+  };
+}
+function simpleAdd(kind){
+  var isNote=kind==='note';
+  sheet('<h1>'+(isNote?'Quick note':'Routine item')+'</h1>'+
+    '<label>'+(isNote?'Note':'What to do (e.g. Take medicine)')+'</label>'+(isNote?'<textarea id="s_text" rows="4"></textarea>':'<input id="s_text">')+
+    (isNote?'':'<label>Daily reminder time (optional)</label><input id="s_time" type="time">')+
+    '<div class="btns"><button class="btn" id="s_save">Save</button><button class="btn sec" data-act="close">Cancel</button></div>');
+  $('#s_save').onclick=async function(){
+    var text=val('s_text').trim(); if(!text) return;
+    if(isNote) db.notes.unshift({id:newId(), text:text, at:new Date().toISOString()});
+    else db.routine.push({id:newId(), text:text, time:val('s_time'), doneDate:''});
+    save(); await rescheduleAll(); closeSheet(); render();
+  };
+}
+
+/* ---------- views ---------- */
+function taskRow(t, label){
+  var done=isDone(t), nx=nextOcc(t), over=(t.repeat==='none' && !t.done && nx<new Date());
+  return '<div class="card'+(done?' done':'')+(over?' over':'')+'"><div class="row">'+
+    '<button class="chk'+(done?' on':'')+'" data-act="done" data-id="'+t.id+'">'+(done?'✓':'')+'</button>'+
+    '<div class="grow" data-act="edit" data-id="'+t.id+'"><div class="title">'+esc(t.title)+'</div>'+
+    '<div class="meta mut">'+esc(label||fmt(nx))+'</div>'+
+    '<span class="tag">'+esc(t.cat)+'</span>'+(t.repeat!=='none'?'<span class="tag">🔁 '+REP[t.repeat]+'</span>':'')+(t.priority==='high'?'<span class="tag hi">High</span>':'')+(t.tone!=='default'?'<span class="tag">🔔 '+TONES[t.tone]+'</span>':'')+
+    '</div></div></div>';
+}
+function viewToday(){
+  var now=new Date(), sod=startOfDay(now), h='';
+  h+='<h1>Hello 👋</h1><div class="mut">'+now.toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long'})+'</div>';
+  if(db.exactWarn) h+='<div class="banner" style="margin-top:12px">⚠️ To fire reminders on time, allow "Alarms &amp; reminders". <button class="btn sm" data-act="exact">Allow</button></div>';
+  var over=db.tasks.filter(function(t){ return t.repeat==='none' && !t.done && new Date(t.dueAt)<sod; }).sort(function(a,b){ return new Date(a.dueAt)-new Date(b.dueAt); });
+  if(over.length){ h+='<h2 style="color:var(--red)">Overdue ('+over.length+')</h2>'+over.map(function(t){ return taskRow(t); }).join(''); }
+  var today=db.tasks.filter(function(t){ return occursOn(t,now); }).sort(function(a,b){ return (isDone(a)-isDone(b)) || (minutesOfDay(a)-minutesOfDay(b)); });
+  h+='<h2>Today</h2>'+(today.length?today.map(function(t){ var d=new Date(t.dueAt); return taskRow(t, pad2(d.getHours())+':'+pad2(d.getMinutes())); }).join(''):'<div class="empty">No tasks today 🎉</div>');
+  var rt=db.routine, rd=rt.filter(function(r){ return r.doneDate===todayStr(); }).length;
+  if(rt.length) h+='<div class="card" data-act="tab" data-v="routine"><b>🔁 Routine</b> <span class="mut">'+rd+'/'+rt.length+' done</span></div>';
+  var up=[];
+  for(var i=1;i<=7;i++){ var day=new Date(); day.setDate(day.getDate()+i); db.tasks.forEach(function(t){ if(t.repeat!=='daily' && occursOn(t,day)) up.push({t:t,day:new Date(day)}); }); }
+  if(up.length){ h+='<h2>Next 7 days</h2>'+up.slice(0,15).map(function(u){ var d=new Date(u.t.dueAt); return taskRow(u.t, u.day.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'})+' '+pad2(d.getHours())+':'+pad2(d.getMinutes())); }).join(''); }
+  return h;
+}
+function viewTasks(){ return '<h1>Tasks</h1><input id="q" placeholder="🔍 Search tasks" value="'+esc(q)+'"><div id="list"></div>'; }
+function fillTasks(){
+  var s=q.toLowerCase(), list=db.tasks.filter(function(t){ return !s || (t.title+' '+t.cat).toLowerCase().indexOf(s)>=0; });
+  var pend=list.filter(function(t){ return !isDone(t); }).sort(function(a,b){ return nextOcc(a)-nextOcc(b); });
+  var dn=list.filter(function(t){ return isDone(t); });
+  var h=pend.map(function(t){ return taskRow(t); }).join('');
+  if(!pend.length) h+='<div class="empty">No pending tasks</div>';
+  if(dn.length) h+='<h2>Completed</h2>'+dn.map(function(t){ return taskRow(t); }).join('');
+  $('#list').innerHTML=h;
+}
+function viewRoutine(){
+  var h='<h1>Daily routine</h1><div class="mut">Resets automatically every day</div><div style="height:10px"></div>';
+  if(!db.routine.length) h+='<div class="empty">No items yet. Tap + and add your daily things (medicine, prayers, etc.)</div>';
+  h+=db.routine.map(function(r){
+    var d=r.doneDate===todayStr();
+    return '<div class="card'+(d?' done':'')+'"><div class="row"><button class="chk'+(d?' on':'')+'" data-act="rdone" data-id="'+r.id+'">'+(d?'✓':'')+'</button><div class="grow"><div class="title">'+esc(r.text)+'</div>'+(r.time?'<div class="mut">🔔 daily at '+esc(r.time)+'</div>':'')+'</div><button class="btn sec sm" data-act="rdel" data-id="'+r.id+'">✕</button></div></div>';
+  }).join('');
+  return h;
+}
+function viewVault(){ return '<h1>Vault</h1><input id="q" placeholder="🔍 Search accounts" value="'+esc(q)+'"><div id="list"></div>'; }
+function fillVault(){
+  var s=q.toLowerCase(), list=db.vault.filter(function(v){ return !s || (v.name+' '+v.cat+' '+v.user).toLowerCase().indexOf(s)>=0; });
+  list.sort(function(a,b){ return (b.fav?1:0)-(a.fav?1:0) || a.cat.localeCompare(b.cat) || a.name.localeCompare(b.name); });
+  var h='', last='';
+  if(!list.length) h='<div class="empty">No accounts yet. Tap +</div>';
+  list.forEach(function(v){
+    var g=v.fav?'★ Favorites':v.cat; if(g!==last){ h+='<h2>'+esc(g)+'</h2>'; last=g; }
+    h+='<div class="card"><div class="row" data-act="vopen" data-id="'+v.id+'"><div class="grow title">'+esc(v.name)+'</div><span class="mut">'+esc(v.user)+'</span></div>';
+    if(openV===v.id){
+      h+='<div class="vd">'+
+        '<div class="row"><span class="grow">User: <b>'+esc(v.user)+'</b></span><button class="btn sec sm" data-act="vcopy" data-id="'+v.id+'" data-f="user">Copy</button></div>'+
+        '<div class="row"><span class="grow pw">'+(showPw?esc(v.pass):'••••••••')+'</span><button class="btn sec sm" data-act="vshow">'+(showPw?'Hide':'Show')+'</button><button class="btn sm" data-act="vcopy" data-id="'+v.id+'" data-f="pass">Copy</button></div>'+
+        (v.notes?'<div class="mut" style="white-space:pre-wrap">'+esc(v.notes)+'</div>':'')+
+        (v.expires?'<div class="mut">Change password by: '+esc(v.expires)+'</div>':'')+
+        '<div class="btns"><button class="btn sec sm" data-act="vedit" data-id="'+v.id+'">Edit</button><button class="btn danger sm" data-act="vdel" data-id="'+v.id+'">Delete</button></div></div>';
+    }
+    h+='</div>';
+  });
+  $('#list').innerHTML=h;
+}
+function viewMore(){
+  var s=db.settings, h='<h1>More</h1>';
+  h+='<h2>Quick notes</h2>'+(db.notes.length?db.notes.map(function(n){ return '<div class="card"><div style="white-space:pre-wrap">'+esc(n.text)+'</div><div class="btns"><button class="btn sec sm" data-act="n2t" data-id="'+n.id+'">Make reminder</button><button class="btn sec sm" data-act="ndel" data-id="'+n.id+'">Delete</button></div></div>'; }).join(''):'<div class="mut">No notes</div>')+'<div class="btns"><button class="btn sm" data-act="nadd">+ Note</button></div>';
+  h+='<h2>Location reminders</h2>'+(db.locs.length?db.locs.map(function(l){ return '<div class="card"><div class="row"><div class="grow"><div class="title">📍 '+esc(l.place)+'</div><div>'+esc(l.text)+'</div><div class="mut">'+l.radius+' m • '+(l.active?'On':'Off')+'</div></div></div><div class="btns"><button class="btn sec sm" data-act="ltog" data-id="'+l.id+'">'+(l.active?'Turn off':'Turn on')+'</button><button class="btn sec sm" data-act="ldel" data-id="'+l.id+'">Delete</button></div></div>'; }).join(''):'<div class="mut">No location reminders</div>')+'<div class="btns"><button class="btn sm" data-act="ladd">+ Location reminder</button></div>';
+  h+='<h2>Settings</h2><div class="card">'+
+    '<label>Theme</label><select id="s_theme"><option value="auto"'+(s.theme==='auto'?' selected':'')+'>Auto</option><option value="light"'+(s.theme==='light'?' selected':'')+'>Light</option><option value="dark"'+(s.theme==='dark'?' selected':'')+'>Dark</option></select>'+
+    '<label>Voice language</label><select id="s_vl"><option value="ur-PK"'+(s.voiceLang==='ur-PK'?' selected':'')+'>Urdu</option><option value="en-US"'+(s.voiceLang==='en-US'?' selected':'')+'>English</option><option value="hi-IN"'+(s.voiceLang==='hi-IN'?' selected':'')+'>Hindi</option></select>'+
+    '<label class="inl"><input id="s_sum" type="checkbox"'+(s.summaryOn?' checked':'')+'> Morning summary notification</label>'+
+    '<label>Summary time</label><input id="s_sumt" type="time" value="'+esc(s.summaryTime)+'">'+
+    '<label class="inl"><input id="s_bio" type="checkbox"'+(s.bio?' checked':'')+'> Unlock with fingerprint</label>'+
+    '<div class="btns"><button class="btn sec sm" data-act="chpin">Change PIN</button><button class="btn sec sm" data-act="testn">Test notification</button><button class="btn sec sm" data-act="exact">Alarm permission</button></div></div>';
+  h+='<h2>Backup</h2><div class="card"><div class="mut" style="margin-bottom:8px">Saves all your data in one file. Make a backup before changing or resetting your phone, and keep the file somewhere safe.</div><div class="btns"><button class="btn sm" data-act="backup">Create backup</button><button class="btn sec sm" data-act="restore">Restore</button></div></div>';
+  h+='<div class="mut" style="text-align:center;margin-top:20px">RemindMe v2 • works fully offline</div>';
+  return h;
+}
+function render(){
+  if(locked) return;
+  var navs=document.querySelectorAll('nav button');
+  for(var i=0;i<navs.length;i++) navs[i].classList.toggle('on', navs[i].getAttribute('data-v')===view);
+  $('#fab').style.display = (view==='more') ? 'none' : 'block';
+  var m=$('#main'), keep=m.scrollTop;
+  if(view==='today') m.innerHTML=viewToday();
+  else if(view==='tasks'){ m.innerHTML=viewTasks(); fillTasks(); bindSearch(fillTasks); }
+  else if(view==='routine') m.innerHTML=viewRoutine();
+  else if(view==='vault'){ m.innerHTML=viewVault(); fillVault(); bindSearch(fillVault); }
+  else { m.innerHTML=viewMore(); bindSettings(); }
+  m.scrollTop=keep;
+}
+function bindSearch(fn){ $('#q').oninput=function(){ q=this.value; fn(); }; }
+function applyTheme(){
+  var t=db.settings.theme, dark=t==='dark' || (t==='auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark?'dark':'light');
+}
+function bindSettings(){
+  $('#s_vl').onchange=function(){ db.settings.voiceLang=this.value; save(); };
+  $('#s_theme').onchange=function(){ db.settings.theme=this.value; save(); applyTheme(); };
+  $('#s_sum').onchange=function(){ db.settings.summaryOn=this.checked; save(); rescheduleAll(); };
+  $('#s_sumt').onchange=function(){ if(this.value){ db.settings.summaryTime=this.value; save(); rescheduleAll(); } };
+  $('#s_bio').onchange=async function(){
+    var on=this.checked, B=P.NativeBiometric, el=this;
+    if(!on){ db.settings.bio=false; save(); return; }
+    try{ var a=await B.isAvailable(); if(!a.isAvailable) throw new Error('na'); await B.verifyIdentity({reason:'Turn on fingerprint unlock', title:'RemindMe'}); db.settings.bio=true; save(); toast('Fingerprint enabled'); }
+    catch(e){ el.checked=false; toast('Fingerprint is not available or was not verified'); }
+  };
+}
+
+/* ---------- backup ---------- */
+async function backup(){
+  var FS=P.Filesystem, SH=P.Share;
+  if(!FS||!SH){ toast('Only works in the installed app'); return; }
+  try{
+    var w=await FS.writeFile({path:'remindme-backup-'+todayStr()+'.json', data:JSON.stringify(db), directory:'CACHE', encoding:'utf8'});
+    await SH.share({title:'RemindMe backup', files:[w.uri]});
+  }catch(e){ toast('Backup failed: '+(e.message||e)); }
+}
+function restoreFrom(file){
+  var r=new FileReader();
+  r.onload=async function(){
+    try{
+      var d=JSON.parse(r.result);
+      if(!d || !Array.isArray(d.tasks) || !Array.isArray(d.vault)) throw new Error('This does not look like a backup file');
+      if(!confirm('This will replace your current data. Continue?')) return;
+      var b=defaults(); for(var k in b){ if(d[k]===undefined) d[k]=b[k]; } for(var s in b.settings){ if(d.settings[s]===undefined) d.settings[s]=b.settings[s]; }
+      db=d; save(); applyTheme(); await rescheduleAll(); startGeo(); view='today'; render(); toast('Restored');
+    }catch(e){ toast('Restore failed: '+e.message); }
+  };
+  r.readAsText(file);
+}
+function copyText(txt){
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); }, fallback); } else fallback();
+  function fallback(){ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); toast('Copied'); }catch(e){ toast('Could not copy'); } ta.remove(); }
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', async function(e){
+  var k=e.target.closest('[data-k]'); if(k){ pressKey(k.getAttribute('data-k')); return; }
+  if(e.target.id==='sheet'){ closeSheet(); return; }
+  var el=e.target.closest('[data-act]'); if(!el) return;
+  var act=el.getAttribute('data-act'), id=+el.getAttribute('data-id');
+  var t=db.tasks.filter(function(x){ return x.id===id; })[0], v=db.vault.filter(function(x){ return x.id===id; })[0];
+  switch(act){
+    case 'tab': view=el.getAttribute('data-v'); q=''; openV=null; showPw=false; render(); break;
+    case 'fab': if(view==='vault') vaultSheet(); else if(view==='routine') simpleAdd('routine'); else taskSheet(); break;
+    case 'close': closeSheet(); break;
+    case 'done': if(t){ await setDone(t, !isDone(t)); render(); } break;
+    case 'edit': if(t) taskSheet(t.id); break;
+    case 'rdone': db.routine.forEach(function(r){ if(r.id===id) r.doneDate = (r.doneDate===todayStr()) ? '' : todayStr(); }); save(); render(); break;
+    case 'rdel': if(confirm('Remove this item?')){ db.routine=db.routine.filter(function(r){ return r.id!==id; }); save(); await rescheduleAll(); render(); } break;
+    case 'vopen': openV=(openV===id)?null:id; showPw=false; fillVault(); break;
+    case 'vshow': showPw=!showPw; fillVault(); break;
+    case 'vcopy': if(v) copyText(v[el.getAttribute('data-f')]||''); break;
+    case 'vedit': vaultSheet(id); break;
+    case 'vdel': if(confirm('Delete this account?')){ db.vault=db.vault.filter(function(x){ return x.id!==id; }); openV=null; save(); await rescheduleAll(); fillVault(); } break;
+    case 'nadd': simpleAdd('note'); break;
+    case 'ndel': db.notes=db.notes.filter(function(n){ return n.id!==id; }); save(); render(); break;
+    case 'n2t': var n=db.notes.filter(function(x){ return x.id===id; })[0]; if(n) taskSheet(null, n.text.slice(0,80)); break;
+    case 'chpin': db.settings.pin=null; save(); showLock(); break;
+    case 'testn':
+      if(!LN){ toast('Only works in the installed app'); break; }
+      try{ await LN.schedule({notifications:[{id:2147000000, title:'Test reminder', body:'If you can see this, reminders work ✅', schedule:{at:new Date(Date.now()+5000),allowWhileIdle:true}, channelId:'tone_alarm'}]}); toast('A notification will arrive in 5 seconds'); }catch(err){ toast('Error: '+(err.message||err)); }
+      break;
+    case 'exact': try{ await LN.changeExactNotificationSetting(); db.exactWarn=false; }catch(err){ toast('Allow it in Phone Settings > Apps > RemindMe > Alarms & reminders'); } break;
+    case 'ladd': locSheet(); break;
+    case 'ltog': db.locs.forEach(function(l){ if(l.id===id) l.active=!l.active; }); save(); render(); startGeo(); break;
+    case 'ldel': if(confirm('Delete this?')){ db.locs=db.locs.filter(function(l){ return l.id!==id; }); save(); render(); startGeo(); } break;
+    case 'backup': backup(); break;
+    case 'restore': $('#restoreFile').click(); break;
+  }
+});
+$('#restoreFile').addEventListener('change', function(){ if(this.files[0]) restoreFrom(this.files[0]); this.value=''; });
+
+/* ---------- start ---------- */
+applyTheme(); buildPad(); showLock(); initNotifs(); startGeo();
+if(P.App){ try{ P.App.addListener('backButton', function(){
+  if($('#sheet').classList.contains('on')){ closeSheet(); return; }
+  if(locked){ try{ P.App.minimizeApp(); }catch(e){} return; }
+  if(view!=='today'){ view='today'; q=''; openV=null; render(); return; }
+  try{ P.App.minimizeApp(); }catch(e){}
+}); }catch(e){} }
+if(P.App){ try{ P.App.addListener('appStateChange', function(s){
+  if(!s.isActive){ lastHide=Date.now(); }
+  else { if(!locked && db.settings.pin && Date.now()-lastHide>30000) showLock(); else if(!locked){ rescheduleAll(); render(); } }
+}); }catch(e){} }
+})();
+</script>
+</body>
+</html>
