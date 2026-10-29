@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -57,3 +59,15 @@ jobs:
         with:
           name: RemindMe-APK
           path: out/
+      - name: Publish APK to apk branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout --orphan apk
+          git rm -rf --cached . > /dev/null 2>&1 || true
+          rm -rf /tmp/apkout && cp -r out /tmp/apkout
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp /tmp/apkout/* .
+          git add RemindMe.apk build-info.txt
+          git commit -m "APK build ${GITHUB_RUN_ID}"
+          git push -f origin apk
