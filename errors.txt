@@ -1,0 +1,21 @@
+142:Note: Some input files use unchecked or unsafe operations.
+143:Note: Recompile with -Xlint:unchecked for details.
+160:Note: Some input files use or override a deprecated API.
+161:Note: Recompile with -Xlint:deprecation for details.
+172:Note: Some input files use or override a deprecated API.
+173:Note: Recompile with -Xlint:deprecation for details.
+181:/home/runner/work/RemindMe/RemindMe/android/app/src/main/java/com/remindme/app/AlarmService.java:130: error: onTimeout(int) in AlarmService cannot override onTimeout(int) in Service
+185:Note: Some input files use or override a deprecated API.
+186:Note: Recompile with -Xlint:deprecation for details.
+189:FAILURE: Build failed with an exception.
+191:* What went wrong:
+417:/home/runner/work/RemindMe/RemindMe/android/app/src/main/java/com/remindme/app/AlarmService.java:130: error: onTimeout(int) in AlarmService cannot override onTimeout(int) in Service
+421:Note: Some input files use or override a deprecated API.
+422:Note: Recompile with -Xlint:deprecation for details.
+427:FAILURE: Build failed with an exception.
+429:* What went wrong:
+637:/home/runner/work/RemindMe/RemindMe/android/app/src/main/java/com/remindme/app/AlarmService.java:130: error: onTimeout(int) in AlarmService cannot override onTimeout(int) in Service
+641:Note: Some input files use or override a deprecated API.
+642:Note: Recompile with -Xlint:deprecation for details.
+645:FAILURE: Build failed with an exception.
+647:* What went wrong:
