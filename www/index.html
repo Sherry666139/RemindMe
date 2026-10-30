@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#f5f6fb">
 <title>RemindMe</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -26,6 +27,7 @@
   <nav>
     <button data-act="tab" data-v="today"><span data-i="home"></span>Today</button>
     <button data-act="tab" data-v="tasks"><span data-i="tasks"></span>Tasks</button>
+    <button data-act="tab" data-v="places"><span data-i="place"></span>Places</button>
     <button data-act="tab" data-v="routine"><span data-i="routine"></span>Routine</button>
     <button data-act="tab" data-v="notes"><span data-i="notes"></span>Notes</button>
     <button data-act="tab" data-v="vault"><span data-i="vault"></span>Vault</button>
@@ -48,7 +50,9 @@
 <script src="js/core.js"></script>
 <script src="js/sched.js"></script>
 <script src="js/ai.js"></script>
+<script src="vendor/leaflet/leaflet.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/places.js"></script>
 <script>
   (function () {
     var set = function (sel, html) { var e = document.querySelector(sel); if (e) e.innerHTML = html; };

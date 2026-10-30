@@ -25,7 +25,8 @@ document.addEventListener('click', async function (e) {
       case 'hback': go('today'); break;
       case 'tpl': {
         var tp = TEMPLATES.filter(function (x) { return x.k === v; })[0];
-        if (tp.routine) routineForm(); else if (tp.note) noteForm(); else if (tp.vault) { closeSheet(); go('vault'); vaultForm(); } else taskForm(null, tp.t);
+        if (tp.place) { closeSheet(); go('places'); if (db.places.length) toast('Pick a place and add what to do — or tap + for a new place'); else placeForm(); }
+        else if (tp.routine) routineForm(); else if (tp.note) noteForm(); else if (tp.vault) { closeSheet(); go('vault'); vaultForm(); } else taskForm(null, tp.t);
         break;
       }
       case 'openai': closeSheet(); go('assistant'); setTimeout(function () { $('#aiinput').focus(); }, 100); break;
@@ -85,9 +86,25 @@ document.addEventListener('click', async function (e) {
       case 'accent': db.settings.accent = v; save(); applyTheme(); render(); break;
       case 'catadd': { var nc = $('#s_newcat').value.trim(); if (nc && db.cats.indexOf(nc) < 0) { db.cats.push(nc); save(); render(); } break; }
       case 'catdel': if (db.cats.length > 1 && confirm('Remove category "' + v + '"? Tasks keep their label.')) { db.cats = db.cats.filter(function (c) { return c !== v; }); save(); render(); } break;
-      case 'ladd': locForm(); break;
-      case 'ltog': db.locs.forEach(function (l) { if (l.id === +id) l.active = !l.active; }); save(); render(); startGeo(); break;
-      case 'ldel': if (confirm('Delete this location reminder?')) { db.locs = db.locs.filter(function (l) { return l.id !== +id; }); save(); render(); startGeo(); } break;
+      case 'padd': placeForm(); break;
+      case 'pview': closeSearch(); placeSheet(id); break;
+      case 'pedit': placeForm(id); break;
+      case 'pdel': { var pd = placeById(id); if (pd && confirm('Delete place "' + pd.name + '" and its list?')) { db.places = db.places.filter(function (x) { return x !== pd; }); db.tasks.forEach(function (tk) { if (tk.placeId === pd.id) tk.placeId = null; }); save(); rescheduleSoon(); closeSheet(); render(); } break; }
+      case 'ptoggle': { var pt = placeById(id); if (pt) { pt.active = pt.active === false; save(); rescheduleSoon(); placeSheet(pt.id); render(); toast(pt.active ? 'Place alerts on' : 'Place alerts off'); } break; }
+      case 'ptest': { var pp = placeById(id); if (pp) { if (!placeCount(pp)) { toast('Add something to the list first'); break; } await syncPlaces(); if (P.RmAlarm) { await P.RmAlarm.syncPlaces({ places: [] }).catch(function(){}); } await syncPlaces(); await P.RmAlarm.firePlace({ id: pp.id, transition: 'enter' }); toast('Test alert sent'); } break; }
+      case 'pitem': { var pi = placeById(id); if (pi) { var it = pi.items.filter(function (x) { return x.id === +v; })[0]; if (it) { it.done = !it.done; it.doneAt = it.done ? Date.now() : null; save(); rescheduleSoon(); placeSheet(pi.id); render(); } } break; }
+      case 'pitemdel': { var px = placeById(id); if (px) { px.items = px.items.filter(function (x) { return x.id !== +v; }); save(); rescheduleSoon(); placeSheet(px.id); render(); } break; }
+      case 'pitemadd': { var pa = placeById(id), inp = $('[data-pq="' + id + '"]'); if (pa && inp && inp.value.trim()) { addPlaceItems(pa, splitItems(inp.value)); render(); toast('Added to ' + pa.name); } break; }
+      case 'pclear': { var pc = placeById(id); if (pc) { pc.items = pc.items.filter(function (x) { return !x.done; }); save(); placeSheet(pc.id); render(); } break; }
+      case 'locfix': await ensureLocationPermission(true); await locStatus(); if (placeLoc && !placeLoc.enabled) await P.RmAlarm.openSetting({ which: 'location' }); render(); break;
+      case 'placehere': {
+        var nm = v, pend = (pendingPlaceItems[nm] || []);
+        toast('Getting your location…');
+        try { var c = await currentPosition(); var np = { id: uid(), name: cap1(nm), icon: '📍', lat: c.lat, lng: c.lng, radius: 200, trigger: 'enter', style: 'alarm', cooldownMin: 120, active: true, items: pend.map(function (x) { return { id: uid(), text: x, done: false }; }), createdAt: new Date().toISOString() };
+          db.places.push(np); delete pendingPlaceItems[nm]; save(); rescheduleSoon(); toast('Saved "' + np.name + '" here'); ensureLocationPermission(true); } catch (err) { toast('Could not get location: ' + err.message); }
+        break;
+      }
+      case 'placepick': { var nm2 = v; closeSheet(); go('places'); placeForm(null, { name: cap1(nm2), items: (pendingPlaceItems[nm2] || []).map(function (x) { return { id: uid(), text: x, done: false }; }) }); delete pendingPlaceItems[nm2]; break; }
       case 'backup': backupNow(); break;
       case 'sharebk': extNav = Date.now(); try { if (VAULT.items) await saveVault(); await shareText(bkName(), backupJson(), 'RemindMe backup'); } catch (err) { toast('Share failed: ' + err.message); } break;
       case 'restore': extNav = Date.now(); $('#restoreFile').click(); break;
@@ -106,6 +123,7 @@ if (window.matchMedia) try { matchMedia('(prefers-color-scheme: dark)').addEvent
 /* ---------- startup ---------- */
 (async function start() {
   jlog('start v' + APP_VERSION + ' native=' + IS_NATIVE);
+  placesInit();
   applyTheme(); buildPad(); showLock(); applySecure();
   if (P.RmAlarm) {
     try { P.RmAlarm.addListener('alarmEvent', function (ev) { applyEvent(ev); save(); rescheduleSoon(); render(); }); } catch (e) {}
@@ -117,7 +135,7 @@ if (window.matchMedia) try { matchMedia('(prefers-color-scheme: dark)').addEvent
   }
   await requestNotif();
   await consumeEvents();
-  rescheduleAll(); startGeo(); checkHealthQuiet();
+  rescheduleAll(); checkHealthQuiet(); locStatus();
   setInterval(function () { if (!locked) { consumeEvents(); if (view === 'today' || view === 'tasks') render(); } }, 60000);
 })();
 if (P.App) {
@@ -134,7 +152,7 @@ if (P.App) {
       await consumeEvents();
       var ext = Date.now() - extNav < 300000; extNav = 0;
       if (!locked && !ext && db.settings.pin && lastHide && Date.now() - lastHide >= (db.settings.lockAfter || 0) * 1000) { showLock(); return; }
-      if (!locked) { rescheduleAll(); checkHealthQuiet(); render(); openLaunchGroup(); }
+      if (!locked) { rescheduleAll(); checkHealthQuiet(); locStatus().then(function () { if (view === 'places') render(); }); render(); openLaunchGroup(); }
     });
   } catch (e) {}
 }

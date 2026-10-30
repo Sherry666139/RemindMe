@@ -88,7 +88,7 @@ function unlock() {
 }
 
 /* ================= RENDER ================= */
-var TITLES = { today: 'Today', tasks: 'Tasks', routine: 'Routine', notes: 'Notes', vault: 'Vault', assistant: 'Assistant', settings: 'Settings' };
+var TITLES = { places: 'Places', today: 'Today', tasks: 'Tasks', routine: 'Routine', notes: 'Notes', vault: 'Vault', assistant: 'Assistant', settings: 'Settings' };
 function render() {
   if (locked) return;
   $('#htitle').textContent = TITLES[view] || 'RemindMe';
@@ -97,7 +97,7 @@ function render() {
   $('#hback').style.display = view === 'settings' ? 'flex' : 'none';
   var comp = $('#composer'); comp.style.display = view === 'assistant' ? 'flex' : 'none';
   var m = $('#main'), keep = m.scrollTop;
-  var fn = { today: viewToday, tasks: viewTasks, routine: viewRoutine, notes: viewNotes, vault: viewVault, assistant: viewAssistant, settings: viewSettings }[view];
+  var fn = { places: viewPlaces, today: viewToday, tasks: viewTasks, routine: viewRoutine, notes: viewNotes, vault: viewVault, assistant: viewAssistant, settings: viewSettings }[view];
   m.innerHTML = fn();
   if (view === 'settings') bindSettings();
   if (view === 'assistant') { m.scrollTop = m.scrollHeight; return; }
@@ -113,6 +113,7 @@ function taskCard(t, at, opts) {
   if (t.priority === 'high') tags += '<span class="tag hi">High</span>';
   if (t.style === 'alarm') tags += '<span class="tag">⏰ Alarm</span>';
   if (t.follow && t.follow !== 'off') tags += '<span class="tag">↻ Follow-up</span>';
+  if (t.placeId && placeById(t.placeId)) tags += '<span class="tag">📍 ' + esc(placeById(t.placeId).name) + '</span>';
   return '<div class="card' + (done ? ' done' : '') + (over ? ' over' : '') + '"><div class="row">' +
     '<button class="chk' + (done ? ' on' : '') + '" data-act="tdone" data-id="' + t.id + '" data-at="' + at.getTime() + '">' + I.check + '</button>' +
     '<div class="grow" data-act="tview" data-id="' + t.id + '" data-at="' + at.getTime() + '">' +
@@ -137,6 +138,8 @@ function viewToday() {
     h += '<h2>Routine <span class="cnt">' + rdone + '/' + rt.length + '</span></h2><div class="card"><div class="bar"><i style="width:' + (rt.length ? Math.round(rdone / rt.length * 100) : 0) + '%"></i></div>';
     h += rt.map(function (r) { var d = r.doneDates && r.doneDates[todayStr()]; return '<div class="row' + (d ? ' done' : '') + '" style="margin-top:10px"><button class="chk' + (d ? ' on' : '') + '" data-act="rdone" data-id="' + r.id + '">' + I.check + '</button><div class="grow title" style="font-weight:500">' + esc(r.text) + '</div>' + (r.time ? '<span class="mut">' + esc(r.time) + '</span>' : '') + '</div>'; }).join('') + '</div>';
   }
+  var ps = (db.places || []).filter(function (p) { return p.active !== false && placeCount(p); });
+  if (ps.length) h += '<h2>When you arrive <span class="cnt">' + ps.length + '</span></h2>' + ps.map(function (p) { return '<div class="card row" data-act="pview" data-id="' + p.id + '"><div class="cicon">' + (p.icon || '📍') + '</div><div class="grow"><div class="title">' + esc(p.name) + '</div><div class="mut">' + esc(placeOpen(p).map(function (x) { return x.text; }).concat(placeTasks(p).map(function (t) { return t.title; })).slice(0, 4).join(' · ')) + '</div></div><span class="tag">' + placeCount(p) + '</span></div>'; }).join('');
   var up = [];
   for (var i = 1; i <= 7; i++) { var d = addDays(now, i); dayItems(d).forEach(function (x) { if (x.t.repeat !== 'daily' && x.t.repeat !== 'weekdays') up.push(x); }); }
   if (up.length) h += '<h2>Next 7 days <span class="cnt">' + up.length + '</span></h2>' + up.slice(0, 12).map(function (x) { return taskCard(x.t, x.at, { noOver: true }); }).join('');
@@ -294,6 +297,14 @@ async function applyAiAction(a) {
     return '✅ Task: <b>' + esc(t.title) + '</b><br>' + esc(whenLabel(new Date(t.dueAt))) + ' · ' + esc(repLabel(t)) + '<br>' + esc(preLabel(t.pres)) + (t.follow !== 'off' ? ' · follow-up: ' + esc(FOLLOW[t.follow]) : '') + ' · ' + (t.style === 'alarm' ? 'alarm' : 'notification') +
       '<div class="btns"><button class="btn sec sm" data-act="tedit" data-id="' + t.id + '">Edit</button><button class="btn sec sm" data-act="tundo" data-id="' + t.id + '">Undo</button></div>';
   }
+  if (a.type === 'add_place_items') {
+    var items = (a.items || []).map(String).filter(Boolean); if (!items.length) return '';
+    var pl = findPlace(a.place);
+    if (pl) { addPlaceItems(pl, items); return '📍 Added to <b>' + esc(pl.name) + '</b>: ' + esc(items.join(', ')) + '<br><span class="mut">' + (pl.style === 'alarm' ? 'It will ring' : 'You will get a notification') + ' when you ' + (pl.trigger === 'exit' ? 'leave' : 'arrive') + '.</span><div class="btns"><button class="btn sec sm" data-act="pview" data-id="' + pl.id + '">Open list</button></div>'; }
+    var key = a.place.toLowerCase(); pendingPlaceItems[key] = (pendingPlaceItems[key] || []).concat(items);
+    return '📍 I don\'t know where “' + esc(a.place) + '” is yet. Items to add: ' + esc(items.join(', ')) +
+      '<div class="btns"><button class="btn sm" data-act="placehere" data-v="' + esc(key) + '">I\'m there now — save this spot</button><button class="btn sec sm" data-act="placepick" data-v="' + esc(key) + '">Pick on map</button></div>';
+  }
   if (a.type === 'add_note') { var n = { id: uid(), title: '', text: a.text, pinned: false, at: new Date().toISOString(), updated: new Date().toISOString() }; db.notes.unshift(n); save(); return '📝 Note saved: ' + esc(a.text.slice(0, 80)); }
   if (a.type === 'add_routine') { var r = { id: uid(), text: a.text, time: a.time || '', days: [], style: 'notify', doneDates: {} }; db.routine.push(r); save(); rescheduleSoon(); return '🔁 Routine: ' + esc(r.text) + (r.time ? ' at ' + esc(r.time) : ''); }
   if (a.type === 'complete_task') { var t2 = taskById(a.id); if (!t2) return ''; setOccDone(t2, nextOcc(t2), true); return '✓ Marked done: ' + esc(t2.title); }
@@ -336,6 +347,7 @@ var TEMPLATES = [
   { k: 'doc', icon: '📄', name: 'Submit documents', t: { cat: 'Document', repeat: 'none', pres: [10080, 2880, 1440], follow: '1440x7', style: 'alarm', title: 'Submit ' } },
   { k: 'appt', icon: '📅', name: 'Appointment / meeting', t: { cat: 'Appointment', repeat: 'none', pres: [1440, 60], follow: 'off', style: 'alarm' } },
   { k: 'follow', icon: '📞', name: 'Follow up with someone', t: { cat: 'Follow-up', repeat: 'none', pres: [], follow: '1440x7', style: 'notify', title: 'Follow up with ' } },
+  { k: 'place', icon: '📍', name: 'Reminder at a place (when I arrive…)', place: true },
   { k: 'routine', icon: '🔁', name: 'Daily routine item', routine: true },
   { k: 'note', icon: '📝', name: 'Quick note', note: true },
   { k: 'vault', icon: '🔑', name: 'Save a password', vault: true }
@@ -349,6 +361,7 @@ function fab() {
   if (view === 'vault') return vaultForm();
   if (view === 'notes') return noteForm();
   if (view === 'routine') return routineForm();
+  if (view === 'places') return placeForm();
   addPicker();
 }
 
@@ -371,6 +384,7 @@ function taskForm(id, preset) {
     '<label>When it\'s due</label>' + chipsHtml('style', [['alarm', '⏰ Ring like an alarm until I act'], ['notify', '🔔 Notification only']], t.style) +
     '<label>Follow up if not marked done</label><select id="f_follow">' + opt(FOLLOW, t.follow) + '</select>' +
     '<div class="two"><div><label>Priority</label><select id="f_pri">' + opt({ normal: 'Normal', high: 'High' }, t.priority) + '</select></div><div><label>Sound</label><select id="f_tone">' + opt(TONES, t.tone) + '</select></div></div>' +
+    '<label>Also remind me at a place (optional)</label><select id="f_place"><option value="">— No place —</option>' + (db.places || []).map(function (p) { return '<option value="' + p.id + '"' + (t.placeId === p.id ? ' selected' : '') + '>' + (p.icon || '📍') + ' ' + esc(p.name) + '</option>'; }).join('') + '</select>' +
     '<label>Details (optional)</label><textarea id="f_notes" rows="3" placeholder="Amount, account no., address, what to bring…">' + esc(t.notes || '') + '</textarea>' +
     '<div class="btns"><button class="btn" id="f_save">' + I.check + 'Save</button><button class="btn sec" data-act="close">Cancel</button>' + (isNew ? '' : '<button class="btn danger" id="f_del">' + I.trash + '</button>') + '</div>');
   $('#f_rep').onchange = function () { $('#f_everyBox').style.display = this.value === 'everyN' ? 'block' : 'none'; };
@@ -389,7 +403,7 @@ function taskForm(id, preset) {
     if (!title) { toast('Enter what to do'); return; }
     if (!val('f_date')) { toast('Choose a date'); return; }
     var o = { title: title, dueAt: parseLocal(val('f_date'), val('f_time') || '09:00').toISOString(), cat: chipsVal('cat') || 'Personal', repeat: val('f_rep'), everyN: Math.max(1, +val('f_every') || 2),
-      pres: chipsVal('pres').map(Number), style: chipsVal('style') || 'alarm', follow: val('f_follow'), priority: val('f_pri'), tone: val('f_tone'), notes: val('f_notes').trim(), updatedAt: new Date().toISOString() };
+      pres: chipsVal('pres').map(Number), style: chipsVal('style') || 'alarm', follow: val('f_follow'), priority: val('f_pri'), tone: val('f_tone'), notes: val('f_notes').trim(), placeId: +val('f_place') || null, updatedAt: new Date().toISOString() };
     if (isNew) { o.id = uid(); o.done = false; o.doneOcc = {}; o.createdAt = o.updatedAt; db.tasks.push(o); }
     else { var timeChanged = t.dueAt !== o.dueAt; for (var k in o) t[k] = o[k]; if (t.repeat === 'none' && timeChanged && new Date(t.dueAt) > new Date()) t.done = false; }
     save(); rescheduleAll(); closeSheet(); render();
@@ -405,7 +419,7 @@ function taskDetail(id, atMs) {
   var rows = [
     ['When', whenLabel(at) + ' (' + relLabel(at) + ')'], ['Repeat', repLabel(t)], ['Reminders', preLabel(t.pres)],
     ['Alert', t.style === 'alarm' ? '⏰ Rings until Done / Snooze' : '🔔 Notification'], ['Follow-up', FOLLOW[t.follow] || 'Off'],
-    ['Category', t.cat], ['Priority', t.priority === 'high' ? 'High' : 'Normal'], ['Sound', TONES[t.tone] || 'Default']
+    ['Place', t.placeId && placeById(t.placeId) ? placeById(t.placeId).name : '—'], ['Category', t.cat], ['Priority', t.priority === 'high' ? 'High' : 'Normal'], ['Sound', TONES[t.tone] || 'Default']
   ];
   if (t.repeat !== 'none') rows.push(['Next 3', occsFrom(t, new Date(), 3).map(function (d) { return dayLabel(d); }).join(' · ')]);
   sheet('<h3>' + esc(t.title) + '</h3>' + (done ? '<span class="tag ok">✓ Done</span>' : (at < new Date() ? '<span class="tag hi">Overdue</span>' : '<span class="tag">Pending</span>')) +
@@ -545,7 +559,7 @@ function hlText(text, words) {
 }
 function runSearch() {
   var q = $('#sq').value.trim().toLowerCase(), box = $('#sres');
-  if (!q) { box.innerHTML = '<div class="empty">' + I.search + 'Search tasks, routine, notes and vault.<br>One word is enough.</div>'; return; }
+  if (!q) { box.innerHTML = '<div class="empty">' + I.search + 'Search tasks, places, routine, notes and vault.<br>One word is enough.</div>'; return; }
   var words = q.split(/\s+/).filter(Boolean);
   function match(h) { h = h.toLowerCase(); return words.every(function (w) { return h.indexOf(w) >= 0; }); }
   var h = '';
@@ -554,6 +568,8 @@ function runSearch() {
     var n = nextOcc(t);
     return '<div class="card" data-act="tview" data-id="' + t.id + '" data-at="' + n.getTime() + '"><div class="title">' + hlText(t.title, words) + '</div><div class="when">' + esc(whenLabel(n)) + ' · ' + esc(repLabel(t)) + (t.repeat === 'none' && t.done ? ' · ✓ done' : '') + '</div>' + (t.notes ? '<div class="mut">' + hlText(t.notes.slice(0, 140), words) + '</div>' : '') + '<span class="tag">' + esc(t.cat) + '</span></div>';
   }).join('');
+  var pls = (db.places || []).filter(function (p) { return match(p.name + ' ' + (p.items || []).map(function (i) { return i.text; }).join(' ')); });
+  if (pls.length) h += '<h2>Places</h2>' + pls.map(function (p) { return '<div class="card" data-act="pview" data-id="' + p.id + '"><div class="title">' + (p.icon || '📍') + ' ' + hlText(p.name, words) + '</div><div class="mut">' + hlText((p.items || []).filter(function (i) { return !i.done; }).map(function (i) { return i.text; }).join(' · '), words) + '</div></div>'; }).join('');
   var rs = db.routine.filter(function (r) { return match(r.text); });
   if (rs.length) h += '<h2>Routine</h2>' + rs.map(function (r) { return '<div class="card" data-act="redit" data-id="' + r.id + '"><div class="title">' + hlText(r.text, words) + '</div><div class="when">' + (r.time || 'No reminder') + '</div></div>'; }).join('');
   var ns = db.notes.filter(function (n) { return match(n.title + ' ' + n.text); });
@@ -565,7 +581,7 @@ function runSearch() {
 
 /* ================= HEALTH CHECK (lock-screen reliability) ================= */
 var healthBad = [], lastStatus = null;
-async function getStatus() { if (!P.RmAlarm) return null; try { lastStatus = await P.RmAlarm.status(); } catch (e) { jlog('status ' + e.message); } return lastStatus; }
+async function getStatus() { if (!P.RmAlarm) return null; try { lastStatus = await P.RmAlarm.status(); lastStatus.loc = await locStatus(); } catch (e) { jlog('status ' + e.message); } return lastStatus; }
 function healthItems(s) {
   if (!s) return [];
   var oem = (s.manufacturer || '').toLowerCase(), list = [];
@@ -576,6 +592,12 @@ function healthItems(s) {
   list.push({ ok: s.batteryIgnored, name: 'Battery optimisation off for RemindMe', fix: 'battery', why: 'Stops the phone from putting alarms to sleep.' });
   list.push({ ok: s.overlay, name: 'Display over other apps', fix: 'overlay', why: 'Lets the alarm screen open by itself on phones like Xiaomi, Oppo, Vivo, Infinix.', optional: true });
   list.push({ ok: s.alarmVolume > 0, name: 'Alarm volume above zero', fix: 'alarmVolume', why: 'RemindMe raises it while ringing, but some phones block that.', optional: true });
+  if ((db.places || []).length && s.loc) {
+    list.push({ ok: s.loc.fine, name: 'Location permission', fix: 'locperm', why: 'Needed for reminders at places.' });
+    list.push({ ok: s.loc.background, name: 'Location “Allow all the time”', fix: 'app', why: 'Without it, place reminders only work while RemindMe is open. Permissions → Location → Allow all the time.' });
+    list.push({ ok: s.loc.enabled, name: 'Location (GPS) switched on', fix: 'location', why: 'Place reminders cannot work with location off.' });
+    list.push({ ok: s.loc.gms, name: 'Google Play services', fix: 'app', why: 'Used for battery-friendly place detection. If missing, turn on Fast detection in Settings.', optional: true });
+  }
   if (/xiaomi|redmi|poco/.test(oem)) list.push({ ok: null, name: 'Xiaomi: “Show on Lock screen” + “Display pop-up windows while running in background”', fix: 'miui', why: 'Xiaomi blocks lock-screen alarms by default. Turn both ON in Other permissions.' });
   if (/xiaomi|redmi|poco|oppo|realme|vivo|iqoo|huawei|honor|oneplus|infinix|tecno|itel|asus|letv|samsung/.test(oem)) list.push({ ok: null, name: 'Autostart / background activity allowed', fix: 'autostart', why: 'Your phone brand (' + s.manufacturer + ') can kill apps in the background. Allow Autostart / “No restrictions”.' });
   return list;
@@ -638,8 +660,8 @@ function viewSettings() {
     '<div class="mut">Get a free Gemini key at aistudio.google.com → “Get API key”. Only your request and task titles are sent — never vault data.</div>' +
     '<div class="btns"><button class="btn sec sm" data-act="aitest">Test connection</button></div></div></div>';
   h += '<h2>Voice</h2><div class="card"><label>Voice input language</label>' + sel('s_vl', { 'en-US': 'English (US)', 'en-GB': 'English (UK)', 'ur-PK': 'Urdu', 'hi-IN': 'Hindi', 'ar-SA': 'Arabic' }, s.voiceLang) + '</div>';
-  h += '<h2>Location reminders</h2>' + (db.locs.length ? db.locs.map(function (l) { return '<div class="card"><div class="title">📍 ' + esc(l.place) + '</div><div>' + esc(l.text) + '</div><div class="mut">' + l.radius + ' m · ' + (l.active ? 'On' : 'Off') + '</div><div class="btns"><button class="btn sec sm" data-act="ltog" data-id="' + l.id + '">' + (l.active ? 'Turn off' : 'Turn on') + '</button><button class="btn danger sm" data-act="ldel" data-id="' + l.id + '">Delete</button></div></div>'; }).join('') : '') +
-    '<div class="card"><div class="mut">Get reminded when you arrive somewhere.</div><div class="btns"><button class="btn sec sm" data-act="ladd">＋ Location reminder</button></div></div>';
+  h += '<h2>Places (location reminders)</h2><div class="card"><label class="inl"><input type="checkbox" id="s_fast"' + (s.placesFast ? ' checked' : '') + '> Fast detection (alerts within seconds, uses more battery, shows a “watching places” notification)</label>' +
+    '<div class="mut">Status: ' + esc(placeSyncStatus || '—') + ' · ' + (db.places || []).length + ' places</div><div class="btns"><button class="btn sec sm" data-act="tab" data-v="places">Open Places</button><button class="btn sec sm" data-act="locfix">Location permission</button></div></div>';
   h += '<h2>Backup</h2><div class="card"><div class="mut" style="margin-bottom:6px">Everything (tasks, routine, notes, encrypted vault, settings) in one file. Restoring needs the PIN you had when the backup was made.</div>' +
     '<label class="inl"><input type="checkbox" id="s_auto"' + (s.autoBackup ? ' checked' : '') + '> Automatic daily backup to Documents/RemindMe</label>' +
     '<div class="mut">Last backup: ' + (s.lastAutoBackup ? new Date(s.lastAutoBackup).toLocaleString() : 'never') + '</div>' +
@@ -662,6 +684,7 @@ function bindSettings() {
   on('s_eve', 'onchange', function () { s.eveningOn = this.checked; save(); rescheduleSoon(); });
   on('s_evet', 'onchange', function () { if (this.value) { s.eveningTime = this.value; save(); rescheduleSoon(); } });
   on('s_vl', 'onchange', function () { s.voiceLang = this.value; save(); });
+  on('s_fast', 'onchange', function () { s.placesFast = this.checked; save(); syncPlaces(); if (this.checked) toast('Fast detection on'); });
   on('s_auto', 'onchange', function () { s.autoBackup = this.checked; save(); });
   on('s_secure', 'onchange', function () { s.secure = this.checked; save(); applySecure(); });
   on('s_bio', 'onchange', async function () {
@@ -719,7 +742,7 @@ function restoreFrom(file) {
       if (!confirm('Replace ALL current data with this backup' + (d.backupMeta ? ' from ' + new Date(d.backupMeta.at).toLocaleString() : '') + '?\n\nAfter restoring, unlock with the PIN you used when the backup was made.')) return;
       var keepAi = db.settings.ai;
       delete d.backupMeta; db = migrate(d); if (!db.settings.ai.key) db.settings.ai = keepAi;
-      save(); applyTheme(); await rescheduleAll(); startGeo(); view = 'today'; toast('Restored'); showLock();
+      placesInit(); save(); applyTheme(); await rescheduleAll(); view = 'today'; toast('Restored'); showLock();
     } catch (e) { toast('Restore failed: ' + e.message); }
   };
   r.readAsText(file);
@@ -735,7 +758,8 @@ async function debugReport() {
     '=== RemindMe debug report ===', 'App: v' + APP_VERSION + ' · native: ' + IS_NATIVE + ' · time: ' + new Date().toString(), 'UA: ' + navigator.userAgent,
     'Plugins: ' + Object.keys(P).map(function (k) { return k + '=' + (P[k] ? 'y' : 'n'); }).join(' '),
     'Status: ' + JSON.stringify(st), 'Health issues: ' + (healthBad.join('; ') || 'none'),
-    'Counts: tasks=' + db.tasks.length + ' routine=' + db.routine.length + ' notes=' + db.notes.length + ' vault=' + (VAULT.items ? VAULT.items.length : '(locked)') + ' locs=' + db.locs.length,
+    'Places: ' + JSON.stringify((db.places || []).map(function (p) { return { id: p.id, name: p.name, r: p.radius, trig: p.trigger, open: placeCount(p), active: p.active !== false }; })) + ' sync=' + placeSyncStatus + ' fast=' + db.settings.placesFast,
+    'Counts: tasks=' + db.tasks.length + ' routine=' + db.routine.length + ' notes=' + db.notes.length + ' vault=' + (VAULT.items ? VAULT.items.length : '(locked)') + ' places=' + (db.places || []).length,
     'Last sync: ' + JSON.stringify(lastSync), 'Settings: ' + JSON.stringify(s),
     '--- Next 40 stored alarms (' + list.length + ' total) ---'
   ].concat(list.slice(0, 40).map(function (a) { return new Date(a.at).toLocaleString() + ' | ' + a.kind + (a.snoozed ? ' (snoozed)' : '') + (a.fired ? ' (fired)' : '') + ' | ' + a.group + ' | ' + (a.title || '').slice(0, 40); }))
@@ -755,50 +779,6 @@ async function listen() {
   } catch (e) { toast('Voice input failed: ' + (e.message || e)); return ''; }
 }
 
-/* ================= LOCATION REMINDERS (kept from v2) ================= */
-var geoId = null;
-function haversine(a, b, c, d) { var R = 6371000, r = Math.PI / 180, dLa = (c - a) * r, dLo = (d - b) * r; var x = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(a * r) * Math.cos(c * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2); return 2 * R * Math.asin(Math.sqrt(x)); }
-function checkLocs(loc) {
-  var now = Date.now(), changed = false;
-  db.locs.forEach(function (l) {
-    if (!l.active) return;
-    if (haversine(loc.latitude, loc.longitude, l.lat, l.lng) <= l.radius && now - (l.lastFired || 0) > 6 * 3600e3) {
-      l.lastFired = now; changed = true;
-      if (P.RmAlarm) P.RmAlarm.notifyNow({ id: 2100000000 + (l.id % 40000000), title: '📍 ' + l.place, body: l.text }).catch(function () {});
-    }
-  });
-  if (changed) save();
-}
-async function startGeo() {
-  var BG = P.BackgroundGeolocation; if (!BG) return;
-  if (geoId !== null) { try { await BG.removeWatcher({ id: geoId }); } catch (e) {} geoId = null; }
-  if (!db.locs.some(function (l) { return l.active; })) return;
-  try {
-    geoId = await BG.addWatcher({ backgroundTitle: 'RemindMe', backgroundMessage: 'Location reminders are active', requestPermissions: true, stale: false, distanceFilter: 50 }, function (loc, err) {
-      if (err) { if (err.code === 'NOT_AUTHORIZED') toast('Allow location “All the time” in Settings'); return; }
-      if (loc) checkLocs(loc);
-    });
-  } catch (e) { jlog('geo ' + e.message); }
-}
-function locForm() {
-  var got = null;
-  sheet('<h3>Location reminder</h3><div class="mut" style="margin-bottom:10px">Stand at the place and tap “Use my current location”. You will be reminded when you come near it again.</div>' +
-    '<label>Remind me to</label><input id="l_text" placeholder="e.g. Buy milk"><label>Place name</label><input id="l_place" placeholder="e.g. Market">' +
-    '<label>When within</label><select id="l_rad"><option value="100">100 m</option><option value="200" selected>200 m</option><option value="500">500 m</option><option value="1000">1 km</option></select>' +
-    '<div class="btns" style="margin-bottom:10px"><button class="btn sec" id="l_get">📍 Use my current location</button></div><div class="mut" id="l_info"></div>' +
-    '<div class="btns"><button class="btn" id="l_save">Save</button><button class="btn sec" data-act="close">Cancel</button></div>');
-  $('#l_get').onclick = function () {
-    $('#l_info').textContent = 'Finding location…';
-    navigator.geolocation.getCurrentPosition(function (pos) { got = { lat: pos.coords.latitude, lng: pos.coords.longitude }; $('#l_info').textContent = '✓ Location captured'; },
-      function () { $('#l_info').textContent = 'Could not get location. Turn on GPS and allow permission.'; }, { enableHighAccuracy: true, timeout: 20000 });
-  };
-  $('#l_save').onclick = function () {
-    var text = val('l_text').trim(); if (!text) { toast('Enter what to remind'); return; } if (!got) { toast('Capture the location first'); return; }
-    db.locs.push({ id: uid(), text: text, place: val('l_place').trim() || 'Place', lat: got.lat, lng: got.lng, radius: +val('l_rad'), active: true, lastFired: 0 });
-    save(); closeSheet(); render(); startGeo();
-  };
-}
-
 /* ================= LAUNCH FROM NOTIFICATION ================= */
 async function openLaunchGroup() {
   if (!P.RmAlarm || locked) return;
@@ -809,5 +789,6 @@ async function openLaunchGroup() {
     else if (/^v\d+/.test(g)) go('vault');
     else if (g === 'sum') go('today');
     else if (/^r\d+/.test(g)) go('routine');
+    else if (/^p\d+/.test(g)) { go('places'); var pm = /^p(\d+)/.exec(g); if (pm) placeSheet(+pm[1]); }
   } catch (e) {}
 }

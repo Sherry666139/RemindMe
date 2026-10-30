@@ -1,6 +1,6 @@
 /* RemindMe v3 — core: helpers, plugins, storage, crypto, logging */
 'use strict';
-var APP_VERSION = '3.0';
+var APP_VERSION = '3.1';
 var Cap = window.Capacitor || {};
 var IS_NATIVE = !!(Cap.isNativePlatform && Cap.isNativePlatform());
 
@@ -90,6 +90,7 @@ var I = (function () {
     search: s('<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>'),
     spark: s('<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/>'),
     gear: s('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
+    place: s('<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>'),
     plus: s('<path d="M12 5v14M5 12h14"/>'),
     check: s('<path d="m5 12 5 5L20 7"/>'),
     copy: s('<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
@@ -122,14 +123,14 @@ var DEFAULT_VCATS = [
 ];
 function defaults() {
   return {
-    v: 3, nextId: 1, tasks: [], routine: [], notes: [], vault: null, vaultEnc: null, locs: [], chat: [],
+    v: 3, nextId: 1, tasks: [], places: [], routine: [], notes: [], vault: null, vaultEnc: null, locs: [], chat: [],
     cats: DEFAULT_CATS.slice(), vcats: JSON.parse(JSON.stringify(DEFAULT_VCATS)),
     settings: {
       pin: null, pinLen: 4, bio: false, theme: 'auto', accent: '#4f46e5',
       summaryOn: true, summaryTime: '08:00', eveningOn: false, eveningTime: '21:00',
       voiceLang: 'en-US', snoozeMin: 10, reRingMin: 5, ringSec: 60, maxRepeats: 0, forceVolume: true, vibrate: true,
       defaultTone: 'default', lockAfter: 30, secure: false, autoBackup: true, lastAutoBackup: '',
-      pwRotateDays: 30, vaultSalt: null, setupDone: false, migratedV3: false, failCount: 0, failUntil: 0,
+      pwRotateDays: 30, placesFast: false, vaultSalt: null, setupDone: false, migratedV3: false, failCount: 0, failUntil: 0,
       ai: { provider: 'offline', key: '', model: '', baseUrl: '' }
     }
   };

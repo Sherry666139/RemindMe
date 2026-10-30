@@ -163,7 +163,18 @@ function agenda(range) {
   return lines.length ? lines.join('\n\n') : 'Nothing scheduled ' + (range === 'week' ? 'this week' : range) + '.';
 }
 
-var pendingDraft = null;
+var pendingDraft = null, pendingPlaceItems = {};
+function parsePlaceIntent(text) {
+  var t = text.trim().replace(/[.!?]+$/, ''), m, place, what;
+  var AT = "(?:i'?m|i am|i get|i reach|i arrive|i go|i'll be|i will be|i visit|we'?re|we are)(?: at| to| in| near)?";
+  if ((m = new RegExp('^(?:please )?(?:remind me (?:to |about )?)?(.+?),? (?:when|whenever|once|as soon as) ' + AT + ' (?:the )?(.+)$', 'i').exec(t))) { what = m[1]; place = m[2]; }
+  else if ((m = new RegExp('^(?:when|whenever|once|as soon as) ' + AT + ' (?:the )?(.+?)[,:]? (?:remind me (?:to |about )?|tell me (?:to )?|i need to |i have to )(.+)$', 'i').exec(t))) { place = m[1]; what = m[2]; }
+  else if ((m = /^at (?:the )?([^,:]+?)[,:]\s*(?:remind me (?:to )?)?(.+)$/i.exec(t))) { place = m[1]; what = m[2]; }
+  else if ((m = /^(?:add )?(.+?) (?:to|on) (?:my |the )?(.+?) list$/i.exec(t)) && findPlace(m[2])) { what = m[1]; place = m[2]; }
+  if (!place || !what) return null;
+  what = what.replace(/^(?:to |that i need to |i need to |i have to )/i, '');
+  return { place: place.replace(/\s+(?:please|again)$/i, '').trim(), items: splitItems(what) };
+}
 async function offlineAssistant(text) {
   var low = digitsFix(text.toLowerCase().trim()), m;
   if (pendingDraft) {
@@ -192,6 +203,8 @@ async function offlineAssistant(text) {
     return { reply: f2.length ? 'More than one match: ' + f2.slice(0, 5).map(function (t) { return '"' + t.title + '"'; }).join(', ') : 'I could not find that task.', actions: [] };
   }
   if ((m = /^(?:find|search|look for|where is)[:\s]+(.+)$/.exec(low))) return { reply: '', actions: [{ type: 'search', q: m[1] }] };
+  var pi = parsePlaceIntent(text);
+  if (pi && pi.items.length) return { reply: findPlace(pi.place) ? 'Added.' : 'One more step — where is it?', actions: [{ type: 'add_place_items', place: pi.place, items: pi.items }] };
   if (/\b(password|passwords|vault|credential|login)\b/.test(low) && !/\bchange\b.*\b(remind|every)\b/.test(low)) return { reply: 'For safety I never handle passwords. Open the Vault tab to add or view credentials.', actions: [] };
 
   var res = parseTask(text);
@@ -199,7 +212,7 @@ async function offlineAssistant(text) {
   if (res.missing.indexOf('when') >= 0) { pendingDraft = res.draft; return { reply: 'When should I remind you about "' + res.draft.title + '"? (e.g. "tomorrow 9am", "on 12 Nov", "every Monday at 8")', actions: [] }; }
   return { reply: 'Done.', actions: [{ type: 'add_task', task: res.draft }] };
 }
-var HELP_TEXT = 'Tell me in plain words, for example:\n• Remind me to pay the electricity bill on 5th at 10am, 2 days before\n• Ali\'s birthday on 12 March\n• Submit visa documents next Friday at 11, remind me 3 days and 1 day before, until done\n• Take medicine every day at 9pm\n• Call the client in 2 hours\n• note: wifi password is on the router\n• routine: drink water at 11am\n• What\'s due this week?\n• Mark electricity bill done\n• Delete gym task';
+var HELP_TEXT = 'Tell me in plain words, for example:\n• Remind me to pay the electricity bill on 5th at 10am, 2 days before\n• Ali\'s birthday on 12 March\n• Submit visa documents next Friday at 11, remind me 3 days and 1 day before, until done\n• Take medicine every day at 9pm\n• When I\'m at the market remind me to buy milk, eggs and bread\n• Call the client in 2 hours\n• note: wifi password is on the router\n• routine: drink water at 11am\n• What\'s due this week?\n• Mark electricity bill done\n• Delete gym task';
 
 /* ---------- cloud AI ---------- */
 function aiSystemPrompt() {
@@ -209,8 +222,10 @@ function aiSystemPrompt() {
     'Turn the user request into app actions. Reply ONLY with JSON: {"reply": "short friendly confirmation or answer", "actions": [ ... ]}.\n' +
     'Action types:\n' +
     '{"type":"add_task","title":str,"date":"YYYY-MM-DD","time":"HH:MM","repeat":"none|daily|weekdays|weekly|monthly|yearly|everyN","everyN":int,"remindBefore":[minutes...],"followUp":"off|30x6|60x8|180x4|1440x1|1440x7","alert":"alarm|notify","category":one of ' + JSON.stringify(db.cats) + ',"priority":"normal|high","notes":str}\n' +
+    '{"type":"add_place_items","place":str (use an existing place name if it matches),"items":[str,...]}  ← use this for "remind me to X when I am at / reach / arrive at PLACE"\n' +
     '{"type":"add_note","text":str}\n{"type":"add_routine","text":str,"time":"HH:MM or empty"}\n{"type":"complete_task","id":int}\n{"type":"delete_task","id":int}\n{"type":"search","q":str}\n' +
     'Rules: default alert "alarm". Birthdays: yearly, notify, remindBefore [1440]. Bills: followUp "1440x7", remindBefore [2880]. Document submissions: remindBefore [4320,1440], followUp "1440x7". If no time is given use 09:00. If the date is ambiguous or missing, ask in "reply" with no actions. ' +
+    'Saved places: ' + JSON.stringify((db.places || []).map(function (p) { return p.name; })) + '. ' +
     'For questions about the schedule, answer in "reply" using the task list. Never handle passwords or vault data.\nOpen tasks: ' + JSON.stringify(tasks);
 }
 async function httpPost(url, headers, data) {

@@ -199,6 +199,7 @@ function rescheduleAll() { syncing = syncing.then(doSync).catch(function (e) { j
 var rescheduleSoon = debounce(rescheduleAll, 400);
 async function doSync() {
   var R = P.RmAlarm, b = buildAlarms();
+  if (typeof syncPlaces === 'function') syncPlaces();
   if (!R) { lastSync = { at: Date.now(), count: b.alarms.length, error: 'web preview (no native)' }; return; }
   try {
     var r = await R.sync({ alarms: b.alarms, activeGroups: b.groups });
@@ -218,6 +219,13 @@ async function consumeEvents() {
 function applyEvent(ev) {
   jlog('event ' + ev.action + ' ' + ev.group);
   if (ev.action !== 'done' || !ev.group) return;
+  var pm = /^p(\d+)@/.exec(ev.group);
+  if (pm) {
+    var pl = (db.places || []).filter(function (x) { return x.id === +pm[1]; })[0]; if (!pl) return;
+    (pl.items || []).forEach(function (i) { if (!i.done) { i.done = true; i.doneAt = Date.now(); } });
+    placeTasks(pl).forEach(function (t) { var o = nextOcc(t); if (t.repeat === 'none') { t.done = true; t.doneAt = new Date().toISOString(); } else { t.doneOcc = t.doneOcc || {}; t.doneOcc[occKey(o)] = Date.now(); } });
+    return;
+  }
   var m = /^([tr])(\d+)@(\d{4}-\d{2}-\d{2})$/.exec(ev.group);
   if (!m) return;
   var id = +m[2], key = m[3];
