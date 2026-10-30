@@ -88,7 +88,7 @@ public class AlarmService extends Service {
         tryLaunchActivity(id);
         if (timeout != null) handler.removeCallbacks(timeout);
         final int ringId = id;
-        timeout = () -> onTimeout(ringId);
+        timeout = () -> onRingTimeout(ringId);
         int sec = Math.max(15, a.optInt("ringSec", 60));
         handler.postDelayed(timeout, sec * 1000L);
         AlarmStore.log(this, "RINGING id=" + id + " for " + sec + "s");
@@ -127,7 +127,7 @@ public class AlarmService extends Service {
         }
     }
 
-    private void onTimeout(int id) {
+    private void onRingTimeout(int id) {
         if (currentId != id) return;
         JSONObject a = AlarmStore.get(this, id);
         AlarmStore.log(this, "TIMEOUT id=" + id + " (not answered)");
