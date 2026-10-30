@@ -13,6 +13,7 @@ public class BootReceiver extends BroadcastReceiver {
         try {
             Notifier.ensureChannels(c);
             AlarmStore.rescheduleAll(c, a == null ? "boot" : a);
+            if (GeoFences.all(c).length() > 0) GeoFences.registerAll(c, a == null ? "boot" : a);
         } catch (Exception e) {
             AlarmStore.log(c, "boot error " + e);
         }

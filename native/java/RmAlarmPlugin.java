@@ -20,6 +20,14 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
+import com.getcapacitor.PermissionState;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
+import com.google.android.gms.tasks.CancellationTokenSource;
+import android.Manifest;
+import android.annotation.SuppressLint;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -28,7 +36,10 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
-@CapacitorPlugin(name = "RmAlarm")
+@CapacitorPlugin(name = "RmAlarm", permissions = {
+        @Permission(alias = "location", strings = {Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}),
+        @Permission(alias = "bglocation", strings = {Manifest.permission.ACCESS_BACKGROUND_LOCATION})
+})
 public class RmAlarmPlugin extends Plugin {
     static RmAlarmPlugin instance;
 
@@ -36,6 +47,131 @@ public class RmAlarmPlugin extends Plugin {
     public void load() {
         instance = this;
         Notifier.ensureChannels(getContext());
+    }
+
+    /* ---------------- location reminders ---------------- */
+
+    @PluginMethod
+    public void syncPlaces(PluginCall call) {
+        Context c = getContext();
+        try {
+            JSArray arr = call.getArray("places", new JSArray());
+            JSONObject old = GeoFences.all(c), nu = new JSONObject();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject p = arr.optJSONObject(i);
+                if (p == null) continue;
+                String k = String.valueOf(p.optInt("id"));
+                JSONObject prev = old.optJSONObject(k);
+                if (prev != null && !p.has("lastFired")) p.put("lastFired", prev.optLong("lastFired"));
+                nu.put(k, p);
+            }
+            GeoFences.putAll(c, nu);
+            String st = GeoFences.registerAll(c, "sync");
+            JSObject r = new JSObject();
+            r.put("status", st);
+            r.put("count", nu.length());
+            call.resolve(r);
+        } catch (Exception e) {
+            AlarmStore.log(c, "syncPlaces error " + e);
+            call.reject(e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void locationStatus(PluginCall call) {
+        Context c = getContext();
+        JSObject r = new JSObject();
+        r.put("fine", GeoFences.hasFine(c));
+        r.put("background", GeoFences.hasBackground(c));
+        r.put("enabled", GeoFences.locationOn(c));
+        r.put("gms", GeoFences.gmsOk(c));
+        r.put("sdk", Build.VERSION.SDK_INT);
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void requestLocation(PluginCall call) {
+        if (!GeoFences.hasFine(getContext())) {
+            requestPermissionForAlias("location", call, "locPermCb");
+            return;
+        }
+        askBackground(call);
+    }
+
+    @PermissionCallback
+    private void locPermCb(PluginCall call) {
+        if (getPermissionState("location") != PermissionState.GRANTED) {
+            JSObject r = new JSObject();
+            r.put("fine", false);
+            r.put("background", false);
+            call.resolve(r);
+            return;
+        }
+        askBackground(call);
+    }
+
+    private void askBackground(PluginCall call) {
+        Context c = getContext();
+        if (GeoFences.hasBackground(c) || Build.VERSION.SDK_INT < 29) {
+            JSObject r = new JSObject();
+            r.put("fine", true);
+            r.put("background", GeoFences.hasBackground(c));
+            call.resolve(r);
+            return;
+        }
+        if (Build.VERSION.SDK_INT == 29) {
+            requestPermissionForAlias("bglocation", call, "bgPermCb");
+            return;
+        }
+        // Android 11+: "Allow all the time" can only be chosen in Settings
+        JSObject r = new JSObject();
+        r.put("fine", true);
+        r.put("background", false);
+        r.put("needsSettings", true);
+        call.resolve(r);
+    }
+
+    @PermissionCallback
+    private void bgPermCb(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("fine", true);
+        r.put("background", GeoFences.hasBackground(getContext()));
+        call.resolve(r);
+    }
+
+    @SuppressLint("MissingPermission")
+    @PluginMethod
+    public void getPosition(PluginCall call) {
+        Context c = getContext();
+        if (!GeoFences.hasFine(c)) {
+            call.reject("no-permission");
+            return;
+        }
+        try {
+            CancellationTokenSource cts = new CancellationTokenSource();
+            LocationServices.getFusedLocationProviderClient(c)
+                    .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, cts.getToken())
+                    .addOnSuccessListener(loc -> {
+                        if (loc == null) {
+                            call.reject("no-fix");
+                            return;
+                        }
+                        JSObject r = new JSObject();
+                        r.put("lat", loc.getLatitude());
+                        r.put("lng", loc.getLongitude());
+                        r.put("accuracy", loc.getAccuracy());
+                        call.resolve(r);
+                    })
+                    .addOnFailureListener(e -> call.reject(e.getMessage()));
+        } catch (Throwable e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void firePlace(PluginCall call) {
+        GeoFences.trigger(getContext(), call.getInt("id", 0), call.getString("transition", "enter"));
+        call.resolve();
     }
 
     static void emit(JSONObject ev) {
@@ -229,6 +365,9 @@ public class RmAlarmPlugin extends Plugin {
                 break;
             case "alarmVolume":
                 ok = start(new Intent(Settings.ACTION_SOUND_SETTINGS));
+                break;
+            case "location":
+                ok = start(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
                 break;
             case "dnd":
                 ok = start(new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));

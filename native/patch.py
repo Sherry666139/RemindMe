@@ -51,6 +51,7 @@ comps = '''
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
         <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <receiver android:name=".GeofenceReceiver" android:exported="false" />
         <receiver android:name=".AlarmReceiver$Boot" android:exported="true" />
 '''
 # Boot receiver: separate exported receiver with system intent filters
@@ -65,6 +66,7 @@ comps = comps.replace('<receiver android:name=".AlarmReceiver$Boot" android:expo
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+                <action android:name="android.location.PROVIDERS_CHANGED" />
             </intent-filter>
         </receiver>''')
 if '.AlarmService' not in s:
@@ -76,7 +78,9 @@ g = os.path.join(os.path.dirname(APP), '..', 'build.gradle')
 g = os.path.normpath(g)
 if os.path.exists(g):
     t = open(g).read()
-    t = re.sub(r'versionCode \d+', 'versionCode 30', t)
-    t = re.sub(r'versionName "[^"]*"', 'versionName "3.0"', t)
+    t = re.sub(r'versionCode \d+', 'versionCode 31', t)
+    t = re.sub(r'versionName "[^"]*"', 'versionName "3.1"', t)
+    if 'play-services-location' not in t:
+        t = t.replace('dependencies {', "dependencies {\n    implementation 'com.google.android.gms:play-services-location:21.3.0'", 1)
     open(g, 'w').write(t)
-    print('set version 3.0 in', g)
+    print('set version 3.1 + gms location in', g)
