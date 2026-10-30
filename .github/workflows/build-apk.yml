@@ -27,18 +27,8 @@ jobs:
         run: python3 gen_sounds.py
       - name: Create Android project
         run: npx cap add android
-      - name: Add permissions and tones
-        run: |
-          mkdir -p android/app/src/main/res/raw
-          cp sounds/*.wav android/app/src/main/res/raw/
-          python3 - <<'PYEOF'
-          p = 'android/app/src/main/AndroidManifest.xml'
-          s = open(p).read()
-          perms = ['POST_NOTIFICATIONS', 'SCHEDULE_EXACT_ALARM', 'USE_EXACT_ALARM', 'VIBRATE', 'RECEIVE_BOOT_COMPLETED', 'USE_BIOMETRIC', 'RECORD_AUDIO', 'ACCESS_FINE_LOCATION', 'ACCESS_COARSE_LOCATION', 'ACCESS_BACKGROUND_LOCATION', 'FOREGROUND_SERVICE', 'FOREGROUND_SERVICE_LOCATION', 'WAKE_LOCK']
-          add = ''.join('    <uses-permission android:name="android.permission.%s" />\n' % x for x in perms if 'android.permission.%s"' % x not in s)
-          s = s.replace('</manifest>', add + '</manifest>')
-          open(p, 'w').write(s)
-          PYEOF
+      - name: Inject native alarm engine
+        run: python3 native/patch.py
       - name: Sync
         run: npx cap sync android
       - name: Use fixed signing key (so future updates install over the old app)
@@ -46,7 +36,21 @@ jobs:
           mkdir -p ~/.android
           cp debug.keystore ~/.android/debug.keystore
       - name: Build debug APK
-        run: bash build.sh
+        run: bash build.sh 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
+      - name: Publish build log on failure
+        if: failure()
+        run: |
+          cp build.log /tmp/build.log || echo "no log" > /tmp/build.log
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout --orphan buildlog
+          git rm -rf --cached . > /dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          grep -n -E "error:|ERROR|FAILURE|What went wrong|e: " /tmp/build.log | head -200 > errors.txt || true
+          tail -300 /tmp/build.log > tail.txt
+          git add errors.txt tail.txt
+          git commit -m "build log ${GITHUB_RUN_ID}"
+          git push -f origin buildlog
       - name: Show what was built
         if: always()
         run: cat build-info.txt >> "$GITHUB_STEP_SUMMARY" || true
