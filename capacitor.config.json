@@ -2,5 +2,12 @@
   "appId": "com.remindme.app",
   "appName": "RemindMe",
   "webDir": "www",
-  "server": { "androidScheme": "https" }
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
 }
